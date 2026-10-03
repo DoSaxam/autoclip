@@ -38,14 +38,18 @@ _rotation_offset = 0
 
 def _profile_fields():
     fields = {}
+    addrs = []
     with open(PROFILE) as f:
         for line in f:
             line = line.strip()
             if "=" in line:
                 k, v = line.split("=", 1)
-                fields[k.strip()] = v.strip()
+                k = k.strip()
+                if k == "Address":
+                    addrs.append(v.strip())  # keep BOTH IPv4 and IPv6 lines
+                else:
+                    fields[k] = v.strip()
     priv = fields.get("PrivateKey", "")
-    addrs = [v for k, v in fields.items() if k == "Address"]
     pub = fields.get("PublicKey", "")
     return priv, addrs, pub
 

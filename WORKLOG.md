@@ -142,3 +142,24 @@ Work Log:
 
 Stage Summary:
 - App fully live and verified; repo committed and push-ready; awaiting GitHub PAT from user to push.
+
+---
+Task ID: YT-FIX
+Agent: main
+Task: Fix YouTube downloads on datacenter IP (sandbox UDP throttled, WARP dead)
+
+Work Log:
+- Diagnosed: ALL UDP high ports (2408/4500/500/8787/443) firewalled by sandbox (WireGuard handshake initiations sent, zero responses). UDP 53/123 + QUIC 443-to-non-CF work. WARP impossible on this network.
+- Fixed latent bug in warp.py:_profile_fields — dict overwrote duplicate `Address` lines so generated warp.conf lost IPv4 (kept only IPv6) → "no route". Now collects all Address lines. (WARP still dead here due to firewall, but correct on networks that allow UDP.)
+- Installed bgutil-ytdlp-pot-provider 2.0.1 (pip plugin) + built Node server at /home/z/bgutil-ytdlp-pot-provider/server (tsc). PO tokens generate fine but YouTube still blocks datacenter IP at player level — PO token alone insufficient here.
+- Tested player clients (tv/visionos/mweb/ios/android_vr/web_embedded) with impersonate+POT: all LOGIN_REQUIRED.
+- Tested Piped (5 dead), Invidious (8 dead), cobalt (only co.otomir23.me resolves but tunnel streams 0 bytes).
+- **WORKING FIX: loader.to relay** — POST /ajax/download.php?format=1080&url= → poll progress_url → GET CDN url (savenow.to, IP-unlocked). Verified 132MB/719s 1080p h264+aac download.
+- engine/relay.py: relay_download() — cancel-aware (check_cancel in poll loop + chunk loop), real progress (processing 0.02–0.30, download 0.30–0.999 with MB/speed/ETA), .part atomic rename, title from Content-Disposition.
+- pipeline.py: on BOT_BLOCK + YouTube URL → relay fallback before hard error.
+- supervisor.py: now also manages bgutil PO-token server (:4416, /ping health, adopt/restart with backoff).
+- curl_cffi impersonate + "cloudflare anti-bot" retry patterns in yt-dlp chain (from earlier session).
+
+Stage Summary:
+- **YouTube E2E VERIFIED on https://youtu.be/tXdD-eydL7k**: relay download (155s incl. server processing) → whisper 719s real progress → LLM analysis → 2 clips (score 90/85, titled "How My Dad's Cash Drawer Taught Me Accounting" / "Teaching Accounting To A 10-Year-Old") → 1080×1920 h264+aac rendered. Stage: job 850d1c1158bd done.
+- Known cosmetic: relay MP4s carry a bin_data (YouTube timedtext) track that survives into output; 0 kb/s, harmless to players/uploaders.

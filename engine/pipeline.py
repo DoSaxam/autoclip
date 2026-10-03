@@ -11,6 +11,7 @@ import traceback
 
 from . import config, store, subs, effects
 from . import faces as face_mod
+from . import relay as relay_mod
 
 import requests
 
@@ -153,6 +154,17 @@ def download_source(job):
                     # tunnel egress may be burned — try direct as a last resort
                     use_proxy = False
                     continue
+                if relay_mod.is_youtube(url):
+                    # datacenter IP blocked by YouTube — relay through loader.to CDN
+                    dest = os.path.join(job_dir, "source.mp4")
+                    path, title = relay_mod.relay_download(
+                        job, url, dest,
+                        set_progress=lambda p, msg=None: _set(job_id, progress=p) if msg is None else _set(job_id, progress=p, message=msg),
+                        check_cancel=_check_cancel,
+                        on_message=lambda m: _set(job_id, message=m),
+                    )
+                    dur = probe_media(path)["duration"]
+                    return path, title or os.path.basename(url), dur
                 raise RuntimeError(
                     "This platform is asking for sign-in verification from this server "
                     "(datacenter IP restriction). Try a different link, a direct MP4 URL, "

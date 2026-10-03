@@ -25,6 +25,8 @@ ROOT = os.path.dirname(BASE)  # project root
 
 ENGINE_PORT = 8001
 BRIDGE_PORT = 8002
+POT_PORT = 4416
+POT_SERVER = "/home/z/bgutil-ytdlp-pot-provider/server"
 
 
 def log(msg):
@@ -61,6 +63,8 @@ def acquire_lock():
 
 def port_up(port, path="/engine/health", is_engine=True):
     import urllib.request
+    if port == POT_PORT:
+        path = "/ping"
     url = f"http://127.0.0.1:{port}" + (path if is_engine else "/health")
     try:
         with urllib.request.urlopen(url, timeout=2) as r:
@@ -92,6 +96,20 @@ def start_bridge():
         stderr=subprocess.STDOUT,
     )
     log(f"llm-bridge started pid={proc.pid}")
+    return proc
+
+
+def start_pot():
+    """bgutil PO-token provider for yt-dlp (YouTube attestation tokens)."""
+    if not os.path.exists(os.path.join(POT_SERVER, "build", "main.js")):
+        return None
+    proc = subprocess.Popen(
+        ["node", "build/main.js"],
+        cwd=POT_SERVER, env=dict(os.environ),
+        stdout=open(os.path.join(DATA, "pot.log"), "ab"),
+        stderr=subprocess.STDOUT,
+    )
+    log(f"pot-server started pid={proc.pid}")
     return proc
 
 
@@ -170,6 +188,10 @@ def main():
         procs["bridge"] = start_bridge()
     else:
         log("bridge already up — adopting")
+    if not port_up(POT_PORT):
+        procs["pot"] = start_pot()
+    else:
+        log("pot-server already up — adopting")
 
     # WARP tunnel — initial bringup in a background thread; healed every 20s
     threading.Thread(target=warp_heal, daemon=True, name="warp-heal").start()
@@ -183,10 +205,13 @@ def main():
         if now - last_check < 2.5:
             continue
         last_check = now
-        for name, port, starter, is_engine in (
+        _services = [
             ("engine", ENGINE_PORT, start_engine, True),
             ("bridge", BRIDGE_PORT, start_bridge, False),
-        ):
+        ]
+        if os.path.exists(os.path.join(POT_SERVER, "build", "main.js")):
+            _services.append(("pot", POT_PORT, start_pot, False))
+        for name, port, starter, is_engine in _services:
             if port_up(port, is_engine=is_engine):
                 continue
             # child died -> restart with backoff
