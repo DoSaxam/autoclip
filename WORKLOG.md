@@ -186,3 +186,19 @@ Stage Summary:
 - 320×568: documentElement.scrollWidth === 320 on create, style (scrolled), generate (scrolled), library (scrolled) — no horizontal overflow.
 - VLM review: generate 10/10, style 9/10, create 8/10 (floating-CTA occlusion in unscrolled view is by-design chrome-over-content; verified settings card scrolls clear: bottom 628 < CTA top 704), 320px 7/10 (truncated URL by design, tight-but-fitting stage labels).
 
+
+---
+Task ID: SESSION3-FINAL
+Agent: main
+Task: Supervisor crash fix, full UI rebuild verification, YouTube E2E via new UI, GitHub push prep
+
+Work Log:
+- Fixed supervisor crash: port_up() built "/health" path for pot-server (bgutil only serves /ping) → port always "down" → KeyError 'pot' in restart loop → supervisor died ~3s after boot (engine orphaned, self-heal broken). Rewrote port_up with correct per-service paths + defaultdict backoff. Engine-kill self-heal re-verified (22/22 E2E).
+- UI REBUILD from zero by frontend-styling-expert: "Aurora Glass" design (violet→fuchsia gradients, glass cards, floating tab bar Create/Library, 4-node pipeline visualization, shimmer skeletons, two-tap cancel). 8 files rewritten; lib/autoclip.ts + api + engine untouched. Lint 0/0.
+- My own browser verification at 390×844: YouTube URL → Hormozi preset → Generate → relay download → real transcribe % → 2 clips ("Teaching Accounting to a 10-Year-Old", "Assets = Liabilities + Equity Explained") → videos readyState 4, download+zip links, 0 console errors, scrollWidth 390.
+- WARP intermittently healthy again (11:24 brief window) — supervisor rotates + heals automatically; relay is the reliable fallback on this network.
+- design-tokens.json v2 (Aurora Glass) + README YouTube three-layer fallback docs + test-checklist session 3.
+- Cleaned stray tool-results/ from repo; .gitignore updated.
+
+Stage Summary:
+- All services healthy and self-healing; 22/22 E2E; YouTube works end-to-end; UI fully rebuilt and verified; repo ready for GitHub push.

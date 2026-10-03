@@ -10,7 +10,8 @@ Mobile-first web app (390px, PWA-installable) + Python rendering engine. No mock
 1. **Source** — paste any public video URL (YouTube, direct MP4, most platforms) or upload a file.
 2. **Style** — pick one of 15 caption presets (Karaoke, Beast, Hormozi, Pop, Bounce, Wobble, Rainbow, Typewriter, Slide, Neon, Elastic, Marker, Boxed, Outline, Minimal), 23 fonts, position/size sliders, 4 aspect ratios (9:16, 1:1, 4:5, 16:9), 12 video effects, face tracking, podcast split-screen, watermark.
 3. **Generate** — real pipeline with live progress:
-   - `yt-dlp` download (WARP-tunneled for YouTube, client fallback chain, `curl_cffi` impersonation for Cloudflare-403 sites)
+   - `yt-dlp` download (WARP-tunneled when available, client fallback chain, `curl_cffi` impersonation for Cloudflare-403 sites, bgutil PO-token server)
+   - **YouTube on datacenter IPs**: automatic loader.to CDN relay fallback (`engine/relay.py`) — real progress, cancel-aware, works even when the IP is hard-blocked
    - `faster-whisper` word-level transcription + VAD (real % = processed seconds / total)
    - LLM viral-moment scoring (0–100, titles, reasons) with heuristic fallback — pipeline never breaks
    - Sentence-boundary clip selection (15–90s or custom, 1–20 or Auto, never mid-word)
@@ -54,17 +55,28 @@ python engine/supervisor.py     # spawns FastAPI :8001 + LLM bridge :8002 (+ WAR
 
 Then open `http://localhost:3000`. The engine can also be started automatically by the app itself: `instrumentation.ts` spawns `engine/supervisor.py` on Next.js boot (node runtime), and `/api/engine/ensure` re-spawns it if it ever dies.
 
-### Optional: YouTube via Cloudflare WARP
+### YouTube on datacenter IPs (three-layer fallback)
 
-Datacenter IPs are often bot-blocked by YouTube. The engine ships a userspace WARP tunnel (`engine/warp/`):
+YouTube hard-blocks datacenter egress IPs ("Sign in to confirm you're not a bot"). The engine tries three strategies automatically, in order:
+
+1. **Direct yt-dlp** with client fallback chain + PO tokens (bgutil server) + TLS impersonation — works on clean IPs.
+2. **Cloudflare WARP tunnel** (`engine/warp/`, userspace wireproxy SOCKS5 — no TUN/root) when the network allows UDP to WARP endpoints. Supervisor rotates endpoints and re-heals every 20s.
+3. **loader.to CDN relay** (`engine/relay.py`) — the server processes the video and serves it from an IP-unlocked CDN with real byte-level progress. Verified working even when 1 and 2 are both impossible (e.g. this sandbox firewalls all high UDP ports).
+
+If WARP is desired on a fresh box:
 
 ```bash
 cd engine/warp
 printf 'y\n' | ./wgcf register --accept-tos && ./wgcf generate   # new WARP identity
-./wireproxy -c warp.conf &                                       # SOCKS5 on 127.0.0.1:40000
+# supervisor auto-starts wireproxy and rotates endpoints
 ```
 
-`supervisor.py` health-checks and rotates endpoints automatically. Without it, direct MP4 links and file uploads always work.
+Optional bgutil PO-token server (yt-dlp YouTube attestation tokens) — supervisor auto-manages it if present at `/home/z/bgutil-ytdlp-pot-provider/server`:
+
+```bash
+git clone --depth 1 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git ~/bgutil-ytdlp-pot-provider
+cd ~/bgutil-ytdlp-pot-provider/server && npm install && npx tsc
+```
 
 > ⚠️ faster-whisper 1.2.1 + av compatibility: if `import av` fails with an unexpected kwarg, patch `faster_whisper/audio.py` to drop `metadata_errors="ignore"`. Do **not** force-upgrade `av`.
 
@@ -88,6 +100,7 @@ scripts/e2e_test.sh              # full E2E suite (22 checks)
 
 | Test | Result |
 |---|---|
+| **YouTube link end-to-end (bot-blocked IP)** | ✅ relay fallback → 719s video → clips with real titles/scores, verified via API and browser |
 | Direct MP4 link → clips | ✅ 1080×1920 H.264+AAC, captions+progress bar pixel-verified |
 | File upload via UI → clips | ✅ |
 | YouTube via WARP tunnel | ✅ extraction verified; sandbox UDP throttling → auto-heal + graceful error + upload guidance |
