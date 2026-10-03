@@ -1,29 +1,28 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
+import { CreateScreen } from "@/components/autoclip/CreateScreen";
 import { StyleStep } from "@/components/autoclip/StyleStep";
 import { GenerateView } from "@/components/autoclip/GenerateView";
+import { LibraryScreen } from "@/components/autoclip/LibraryScreen";
 import {
   api, ClipSettings, DEFAULT_SETTINGS, Job, loadSettings, saveSettings, formatBytes,
 } from "@/lib/autoclip";
-import {
-  Scissors, Link2, Upload, ArrowRight, ArrowLeft, Loader2, ClipboardPaste,
-  Timer, History, Zap, X, Sparkles, Film, FileVideo, Check,
-} from "lucide-react";
+import { Sparkles, Library as LibraryIcon, Zap, Loader2 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-type Step = "source" | "style" | "generate";
+type Screen = "create" | "style" | "generate" | "library";
+type Tab = "create" | "library";
 
-const STEP_LABELS: Record<Step, string> = { source: "Source", style: "Style", generate: "Generate" };
-const CARD =
-  "rounded-2xl border border-white/5 bg-gradient-to-b from-zinc-900/70 to-zinc-900/30 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
-
+/**
+ * Autoclip app shell — fixed glass header + floating glass tab bar,
+ * four screens (Create / Style / Generate / Library). Aurora Glass theme.
+ * All engine logic (jobs, polling, uploads, persistence) lives here.
+ */
 export default function Home() {
   const { toast } = useToast();
-  const [step, setStep] = useState<Step>("source");
+  const [screen, setScreen] = useState<Screen>("create");
   const [settings, setSettings] = useState<ClipSettings>(DEFAULT_SETTINGS);
   const [url, setUrl] = useState("");
   const [upload, setUpload] = useState<{ id: string; name: string; size: number } | null>(null);
@@ -31,16 +30,34 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [job, setJob] = useState<Job | null>(null);
   const [history, setHistory] = useState<Job[]>([]);
-  const fileInput = useRef<HTMLInputElement>(null);
+  const [online, setOnline] = useState(true);
+  const [styleMode, setStyleMode] = useState<"create" | "rerender">("create");
+  const [generateOrigin, setGenerateOrigin] = useState<"create" | "library">("create");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ---- initial load + engine heartbeat (refreshes history + online state) ----
+  const refresh = useCallback(async () => {
+    try {
+      const r = await api.listJobs();
+      setHistory(r.jobs);
+      setOnline(true);
+    } catch {
+      setOnline(false);
+    }
+  }, []);
 
   useEffect(() => {
     setSettings(loadSettings());
-    api.listJobs().then((r) => setHistory(r.jobs)).catch(() => {});
+    refresh();
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
-  }, []);
+  }, [refresh]);
+
+  useEffect(() => {
+    const id = setInterval(() => refresh(), 12000);
+    return () => clearInterval(id);
+  }, [refresh]);
 
   useEffect(() => {
     saveSettings(settings);
@@ -109,7 +126,8 @@ export default function Home() {
       );
       const j = await api.getJob(res.job_id);
       setJob(j);
-      setStep("generate");
+      setGenerateOrigin("create");
+      setScreen("generate");
       api.listJobs().then((r) => setHistory(r.jobs)).catch(() => {});
     } catch (e) {
       toast({ title: "Could not start job", description: String((e as Error).message), variant: "destructive" });
@@ -143,7 +161,8 @@ export default function Home() {
     try {
       await api.rerender(job.id, s);
       setJob({ ...job, status: "queued", stage: "queued", progress: 0, clips: [], message: "re-rendering" });
-      setStep("generate");
+      setGenerateOrigin("create");
+      setScreen("generate");
       toast({ title: "Re-rendering", description: "Reusing transcript & analysis — only re-rendering." });
     } catch (e) {
       toast({ title: "Re-render failed", description: String((e as Error).message), variant: "destructive" });
@@ -155,7 +174,8 @@ export default function Home() {
       const j = await api.getJob(id);
       setJob(j);
       setSettings({ ...DEFAULT_SETTINGS, ...j.settings });
-      setStep("generate");
+      setGenerateOrigin("library");
+      setScreen("generate");
     } catch {
       /* ignore */
     }
@@ -175,352 +195,249 @@ export default function Home() {
     setJob(null);
     setUpload(null);
     setUrl("");
-    setStep("source");
+    setScreen("create");
   };
 
-  const stepIdx = step === "source" ? 0 : step === "style" ? 1 : 2;
+  // ---- navigation ----
+  const goTab = (t: Tab) => {
+    if (t === "library") refresh();
+    setScreen(t);
+  };
+
+  const openStyle = () => {
+    setStyleMode("create");
+    setScreen("style");
+  };
+
+  const openRerenderStyle = () => {
+    setStyleMode("rerender");
+    setScreen("style");
+  };
+
+  const styleCta = async () => {
+    if (styleMode === "rerender") await rerender(settings);
+    else await generate();
+  };
+
+  const hasSource = !!(url || upload);
+  const showTabBar = screen !== "generate";
+  const activeTab: Tab = screen === "library" ? "library" : "create";
+
+  // primary CTA (sticky above the tab bar)
+  let cta: { label: string; icon: LucideIcon; onClick: () => void; disabled?: boolean; ghost?: boolean; aria: string } | null = null;
+  if (screen === "create") {
+    cta = hasSource
+      ? { label: "Generate Clips", icon: Zap, onClick: openStyle, aria: "Generate clips" }
+      : { label: "Add a link or file to continue", icon: Sparkles, onClick: () => {}, ghost: true, aria: "Add a source to continue" };
+  } else if (screen === "style") {
+    cta = {
+      label: styleMode === "rerender" ? "Re-render clips" : "Generate Clips",
+      icon: Zap,
+      onClick: styleCta,
+      disabled: submitting,
+      aria: styleMode === "rerender" ? "Re-render clips with current style" : "Generate clips",
+    };
+  }
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100">
-      {/* Header */}
-      <header className="sticky top-0 z-20 border-b border-white/5 bg-zinc-950/85 pt-[env(safe-area-inset-top)] backdrop-blur-md">
-        <div className="mx-auto flex h-14 w-full max-w-md items-center justify-between px-4">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-zinc-950 shadow-[0_4px_16px_-4px_rgba(245,158,11,0.5)]">
-              <Scissors className="h-[18px] w-[18px]" strokeWidth={1.5} />
-            </span>
-            <div>
-              <h1 className="text-[15px] font-bold leading-none tracking-tight">Autoclip</h1>
-              <p className="mt-1 text-[10px] leading-none text-zinc-500">link → viral shorts, fully in cloud</p>
+    <div className="relative min-h-screen bg-[#0B0B14] text-zinc-100">
+      {/* aurora backdrop */}
+      <div aria-hidden="true" className="fixed inset-0 -z-10 overflow-hidden">
+        <div
+          className="absolute inset-0"
+          style={{ background: "radial-gradient(140% 110% at 50% -10%, #171728 0%, #12121F 38%, #0B0B14 78%)" }}
+        />
+        <div
+          className="absolute -top-44 left-1/2 h-[480px] w-[480px] -translate-x-1/2"
+          style={{ background: "radial-gradient(circle, rgba(139,92,246,0.20) 0%, transparent 62%)" }}
+        />
+        <div
+          className="absolute -right-36 top-1/4 h-[380px] w-[380px]"
+          style={{ background: "radial-gradient(circle, rgba(217,70,239,0.12) 0%, transparent 62%)" }}
+        />
+        <div
+          className="absolute -left-36 bottom-0 h-[340px] w-[340px]"
+          style={{ background: "radial-gradient(circle, rgba(34,211,238,0.07) 0%, transparent 62%)" }}
+        />
+      </div>
+
+      {/* fixed glass header */}
+      <header className="fixed inset-x-0 top-0 z-40 pt-[env(safe-area-inset-top)]">
+        <div className="glass-blur border-x-0 border-t-0">
+          <div className="mx-auto flex h-16 w-full max-w-md items-center justify-between px-4">
+            <div className="flex items-center gap-3">
+              <span
+                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-[0_8px_24px_-8px_rgba(139,92,246,0.7)]"
+                aria-hidden="true"
+              >
+                <Sparkles className="h-5 w-5" strokeWidth={1.5} />
+              </span>
+              <div>
+                <h1 className="text-[17px] font-extrabold leading-none tracking-tight text-white">Autoclip</h1>
+                <p className="mt-1 text-[10px] leading-none text-zinc-500">AI viral clip studio</p>
+              </div>
             </div>
-          </div>
-          <span className="flex items-center gap-1.5 rounded-full border border-white/5 bg-white/[0.03] px-2.5 py-1.5 text-[10px] font-medium text-zinc-400">
-            <span className="relative flex h-2 w-2" aria-hidden="true">
-              <span className="ac-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            <span
+              className={`glass flex h-8 items-center gap-2 rounded-full px-3 text-[10px] font-semibold ${
+                online ? "text-emerald-300" : "text-red-300"
+              }`}
+              role="status"
+              aria-label={online ? "Engine online" : "Engine offline"}
+            >
+              <span className="relative flex h-2 w-2" aria-hidden="true">
+                <span className={`ac-ping absolute inline-flex h-full w-full rounded-full ${online ? "bg-emerald-400" : "bg-red-400"}`} />
+                <span className={`relative inline-flex h-2 w-2 rounded-full ${online ? "bg-emerald-400" : "bg-red-400"}`} />
+              </span>
+              {online ? "engine online" : "engine offline"}
             </span>
-            engine online
-          </span>
+          </div>
         </div>
       </header>
 
-      {/* History chips */}
-      {history.length > 0 && step !== "generate" && (
-        <div className="border-b border-white/5 bg-zinc-950/60">
-          <div className="mx-auto flex w-full max-w-md items-center gap-2 px-4 py-2">
-            <History className="h-3.5 w-3.5 shrink-0 text-zinc-600" strokeWidth={1.5} />
-            <div className="flex snap-x gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {history.slice(0, 6).map((h) => {
-                const terminal = h.status === "done" || ["failed", "canceled", "failed_permanent"].includes(h.status);
-                return (
-                  <span key={h.id} className="relative shrink-0 snap-start">
-                    <button
-                      onClick={() => openHistoryJob(h.id)}
-                      aria-label={`Open job: ${h.video_title || h.source_url || "Upload"}`}
-                      className="ac-hit flex h-9 max-w-[190px] items-center gap-2 rounded-full border border-white/5 bg-zinc-900/80 pl-3 pr-3.5 text-[11px] text-zinc-300 transition-all duration-200 hover:border-zinc-600/60 active:scale-[0.97]"
-                    >
-                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                        h.status === "done" ? "bg-emerald-500" :
-                        h.status === "failed" || h.status === "failed_permanent" ? "bg-red-500" :
-                        h.status === "canceled" ? "bg-zinc-600" : "bg-amber-400 animate-pulse"
-                      }`} />
-                      <span className="truncate font-medium">{h.video_title || h.source_url?.slice(0, 30) || "Upload"}</span>
-                      {h.status === "done" && (
-                        <span className="shrink-0 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
-                          {h.clips.length} clip{h.clips.length > 1 ? "s" : ""}
-                        </span>
-                      )}
-                    </button>
-                    {terminal && (
-                      <button
-                        onClick={() => deleteHistoryJob(h.id)}
-                        className="ac-hit absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-zinc-800 text-zinc-400 ring-1 ring-white/10 transition-colors hover:bg-red-500/90 hover:text-white"
-                        aria-label="Delete job from history"
-                      >
-                        <X className="h-3 w-3" strokeWidth={2} />
-                      </button>
-                    )}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Steps indicator with progress fill */}
-      {step !== "generate" && (
-        <div className="mx-auto w-full max-w-md px-4 pt-4" role="group" aria-label="Progress: 3 steps">
-          <div className="relative flex items-center justify-between">
-            <div className="absolute inset-x-[10px] top-[8.5px] h-[3px] overflow-hidden rounded-full bg-zinc-800/80" aria-hidden="true">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-400 transition-all duration-500 ease-out"
-                style={{ width: `${(stepIdx / 2) * 100}%` }}
-              />
-            </div>
-            {(["source", "style", "generate"] as Step[]).map((s, i) => (
-              <div key={s} className="relative z-10 flex flex-col items-center gap-1.5" aria-current={i === stepIdx ? "step" : undefined}>
-                <span
-                  className={`flex h-5 w-5 items-center justify-center rounded-full transition-all duration-300 ${
-                    i < stepIdx
-                      ? "bg-amber-500 text-zinc-950 shadow-[0_0_12px_rgba(245,158,11,0.45)]"
-                      : i === stepIdx
-                        ? "scale-110 border-2 border-amber-400 bg-zinc-950 text-amber-400"
-                        : "border border-zinc-700 bg-zinc-950 text-zinc-600"
-                  }`}
-                >
-                  {i < stepIdx ? <Check className="h-3 w-3" strokeWidth={3} /> : i + 1}
-                </span>
-                <span className={`text-[10px] font-medium ${i <= stepIdx ? "text-zinc-300" : "text-zinc-600"}`}>{STEP_LABELS[s]}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Main content */}
-      <main className="mx-auto w-full max-w-md flex-1 px-4 py-4">
-        {step === "source" && (
-          <div key="source" className="ac-step-in space-y-5">
-            {/* Hero microcopy */}
-            <section aria-label="Intro" className="pt-1">
-              <p className="text-[22px] font-bold leading-tight tracking-tight text-zinc-50">
-                Paste a link — get{" "}
-                <span className="bg-gradient-to-r from-amber-300 via-amber-400 to-orange-400 bg-clip-text text-transparent">
-                  viral-ready clips
-                </span>
-                .
-              </p>
-              <p className="mt-1.5 flex items-center gap-1.5 text-[11px] leading-relaxed text-zinc-500">
-                <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-400/80" strokeWidth={1.5} />
-                AI finds the moments · captions burn in · ready to post
-              </p>
-            </section>
-
-            {/* URL input */}
-            <section aria-label="Video source" className={CARD}>
-              <h2 className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-zinc-100">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 ring-1 ring-inset ring-amber-500/20">
-                  <Link2 className="h-4 w-4" strokeWidth={1.5} />
-                </span>
-                Paste a public video link
-              </h2>
-              <div className="relative">
-                <Input
-                  value={url}
-                  onChange={(e) => { setUrl(e.target.value); setUpload(null); }}
-                  placeholder="https://youtu.be/… or direct .mp4"
-                  className={`h-12 rounded-xl border-white/10 bg-zinc-950/80 text-sm placeholder:text-zinc-600 focus-visible:border-amber-500/50 focus-visible:ring-amber-500/30 ${url ? "pr-[118px]" : "pr-[88px]"}`}
-                  inputMode="url"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  aria-label="Video link"
-                />
-                <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 gap-1">
-                  {url && (
-                    <button
-                      onClick={() => setUrl("")}
-                      aria-label="Clear link"
-                      className="ac-hit flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-zinc-200"
-                    >
-                      <X className="h-4 w-4" strokeWidth={1.5} />
-                    </button>
-                  )}
-                  <button
-                    onClick={pasteFromClipboard}
-                    aria-label="Paste link from clipboard"
-                    className="ac-hit flex h-9 items-center gap-1 rounded-lg bg-amber-500/15 px-2.5 text-[11px] font-semibold text-amber-300 ring-1 ring-inset ring-amber-500/25 transition-all active:scale-95 hover:bg-amber-500/25"
-                  >
-                    <ClipboardPaste className="h-4 w-4" strokeWidth={1.5} /> Paste
-                  </button>
-                </div>
-              </div>
-              <p className="mt-2.5 text-[11px] leading-relaxed text-zinc-500">
-                YouTube, direct MP4 links and most public platforms. Processing happens in the cloud — nothing touches your device.
-              </p>
-            </section>
-
-            <div className="flex items-center gap-3 text-[10px] font-medium uppercase tracking-widest text-zinc-600" aria-hidden="true">
-              <span className="h-px flex-1 bg-zinc-800" /> or <span className="h-px flex-1 bg-zinc-800" />
-            </div>
-
-            {/* Upload */}
-            <section aria-label="Upload file" className={CARD}>
-              <input
-                ref={fileInput}
-                type="file"
-                accept="video/mp4,video/quicktime,video/x-matroska,video/webm"
-                className="hidden"
-                onChange={(e) => pickFile(e.target.files?.[0])}
-              />
-              <button
-                onClick={() => fileInput.current?.click()}
-                disabled={uploading}
-                aria-label="Upload a video file"
-                className="ac-focus group flex min-h-[96px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 bg-zinc-950/50 py-6 transition-all duration-200 hover:border-amber-500/40 hover:bg-amber-500/[0.03] active:scale-[0.99] disabled:opacity-60"
-              >
-                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-zinc-800/80 ring-1 ring-inset ring-white/5 transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:scale-105 group-active:scale-95">
-                  {uploading ? (
-                    <Loader2 className="h-5 w-5 animate-spin text-amber-400" strokeWidth={1.5} />
-                  ) : (
-                    <Upload className="h-5 w-5 text-zinc-300 transition-colors group-hover:text-amber-400" strokeWidth={1.5} />
-                  )}
-                </span>
-                <span className="text-sm font-medium text-zinc-300">{uploading ? "Uploading…" : "Upload a video file"}</span>
-                <span className="text-[10px] text-zinc-600">MP4 · MOV · MKV · WEBM</span>
-              </button>
-              {upload && (
-                <div className="ac-step-in mt-3 flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-2.5">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
-                    <FileVideo className="h-4 w-4" strokeWidth={1.5} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-medium text-emerald-200">{upload.name}</p>
-                    <p className="text-[10px] text-emerald-500/80">{formatBytes(upload.size)} · ready to clip</p>
-                  </div>
-                  <button
-                    onClick={() => setUpload(null)}
-                    aria-label="Remove uploaded file"
-                    className="ac-hit flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-red-300"
-                  >
-                    <X className="h-4 w-4" strokeWidth={1.5} />
-                  </button>
-                </div>
-              )}
-            </section>
-
-            {/* Clip settings */}
-            <section aria-label="Clip settings" className={CARD}>
-              <h2 className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-zinc-100">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 ring-1 ring-inset ring-amber-500/20">
-                  <Timer className="h-4 w-4" strokeWidth={1.5} />
-                </span>
-                Clip length
-              </h2>
-              <div className="mb-3 flex items-center justify-center gap-2">
-                <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-bold tabular-nums text-amber-300">
-                  {settings.clip.minLen}s
-                </span>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">to</span>
-                <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-bold tabular-nums text-amber-300">
-                  {settings.clip.maxLen}s
-                </span>
-                <span className="text-[10px] text-zinc-500">per clip</span>
-              </div>
-              <Slider
-                value={[settings.clip.minLen, settings.clip.maxLen]}
-                min={5}
-                max={120}
-                step={5}
-                onValueChange={([a, b]) => update({ clip: { ...settings.clip, minLen: a, maxLen: Math.max(a, b) } })}
-                aria-label="Clip length range"
-              />
-              <div className="mt-5">
-                <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Number of clips</label>
-                <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  {["auto", "3", "5", "10", "20"].map((n) => {
-                    const selected = settings.clip.maxClips === n;
-                    return (
-                      <button
-                        key={n}
-                        onClick={() => update({ clip: { ...settings.clip, maxClips: n } })}
-                        aria-pressed={selected}
-                        className={`min-h-[44px] min-w-[56px] shrink-0 snap-start rounded-xl border px-3 text-sm font-semibold transition-all duration-200 active:scale-[0.96] ${
-                          selected
-                            ? "border-amber-500/70 bg-amber-500/10 text-amber-300 ring-2 ring-amber-500/40"
-                            : "border-white/5 bg-zinc-900/60 text-zinc-400 hover:border-zinc-600/60"
-                        }`}
-                      >
-                        {n === "auto" ? "Auto" : n}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </section>
-
-            {/* Empty history state */}
-            {history.length === 0 && (
-              <div className="flex items-center gap-3 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-3.5">
-                <span className="relative flex h-11 w-11 shrink-0 items-center justify-center">
-                  <Film className="h-8 w-8 text-zinc-800" strokeWidth={1.5} />
-                  <Scissors className="absolute -right-1 -top-1 h-4 w-4 text-amber-500/70" strokeWidth={1.5} />
-                  <Sparkles className="absolute -bottom-0.5 -left-1 h-3.5 w-3.5 text-amber-400/50" strokeWidth={1.5} />
-                </span>
-                <div>
-                  <p className="text-xs font-semibold text-zinc-300">No clips yet</p>
-                  <p className="mt-0.5 text-[10px] leading-relaxed text-zinc-500">
-                    Your generated clips will appear here for quick re-download.
-                  </p>
-                </div>
-              </div>
-            )}
+      {/* screens */}
+      <main
+        className={`mx-auto w-full max-w-md px-4 pt-[calc(4rem+env(safe-area-inset-top)+1rem)] ${
+          screen === "generate" ? "pb-8" : screen === "library" ? "pb-[9rem]" : "pb-[13.5rem]"
+        }`}
+      >
+        {screen === "create" && (
+          <div key="create" className="ac-screen">
+            <CreateScreen
+              url={url}
+              onUrlChange={(v) => {
+                setUrl(v);
+                if (v) setUpload(null);
+              }}
+              onPaste={pasteFromClipboard}
+              upload={upload}
+              uploading={uploading}
+              onFile={pickFile}
+              onRemoveUpload={() => setUpload(null)}
+              settings={settings}
+              update={update}
+              hasHistory={history.length > 0}
+            />
           </div>
         )}
 
-        {step === "style" && (
-          <div key="style" className="ac-step-in">
-            <StyleStep settings={settings} update={update} />
+        {screen === "style" && (
+          <div key="style" className="ac-slide-up">
+            <StyleStep
+              settings={settings}
+              update={update}
+              onBack={() => setScreen(styleMode === "rerender" ? "generate" : "create")}
+            />
           </div>
         )}
 
-        {step === "generate" && job && (
-          <div key="generate" className="ac-step-in">
+        {screen === "generate" && job && (
+          <div key={`generate-${job.id}`} className="ac-screen">
             <GenerateView
               job={job}
               settings={settings}
               onCancel={cancelJob}
               onRetry={retryJob}
               onRerender={rerender}
+              onOpenStyle={openRerenderStyle}
               onNew={startNew}
+              onBack={() => setScreen(generateOrigin)}
             />
+          </div>
+        )}
+
+        {screen === "library" && (
+          <div key="library" className="ac-screen">
+            <LibraryScreen history={history} onOpen={openHistoryJob} onDelete={deleteHistoryJob} onGoCreate={() => goTab("create")} />
           </div>
         )}
       </main>
 
-      {/* Bottom bar */}
-      {step !== "generate" && (
-        <div className="sticky bottom-0 z-20 border-t border-white/5 bg-gradient-to-t from-zinc-950 via-zinc-950/95 to-zinc-950/80 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-md">
-          <div className="mx-auto flex w-full max-w-md gap-2 px-4">
-            {step === "style" && (
-              <Button
-                variant="outline"
-                onClick={() => setStep("source")}
-                aria-label="Back to source step"
-                className="h-12 flex-1 rounded-xl border-white/10 bg-zinc-900/70 text-[15px] font-medium text-zinc-300 transition-all hover:border-zinc-600/60 active:scale-[0.98]"
+      {/* floating bottom stack: legibility scrim → primary CTA → glass tab bar */}
+      {showTabBar && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40">
+          <div
+            className="h-24 bg-gradient-to-t from-[#0B0B14] via-[#0B0B14]/70 to-transparent"
+            aria-hidden="true"
+          />
+          <div className="pb-[max(0.875rem,env(safe-area-inset-bottom))]">
+            <div className="mx-auto w-full max-w-md space-y-3 px-4">
+              {cta && (
+                <div className="pointer-events-auto">
+                  {cta.ghost ? (
+                    <button
+                      type="button"
+                      disabled
+                      aria-label={cta.aria}
+                      className="glass flex h-14 w-full cursor-default items-center justify-center gap-2 rounded-full text-[13px] font-semibold text-zinc-400"
+                    >
+                      <cta.icon className="h-4 w-4" strokeWidth={1.5} />
+                      {cta.label}
+                    </button>
+                  ) : (
+                    <div className="ac-cta-ring transition-transform duration-200 active:scale-[0.98]">
+                      <button
+                        type="button"
+                        onClick={cta.onClick}
+                        disabled={cta.disabled}
+                        aria-label={cta.aria}
+                        className="ac-focus flex h-14 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-500 via-[#a855f7] to-fuchsia-500 text-[15px] font-bold text-white transition-transform duration-200 active:scale-[0.97] disabled:opacity-60"
+                      >
+                        {submitting ? (
+                          <Loader2 className="h-5 w-5 animate-spin" strokeWidth={1.5} />
+                        ) : (
+                          <cta.icon className="h-5 w-5" strokeWidth={1.5} />
+                        )}
+                        {cta.label}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              <nav
+                className="glass-blur relative pointer-events-auto flex items-center rounded-full p-1.5"
+                aria-label="Primary tabs"
               >
-                <ArrowLeft className="h-4 w-4" strokeWidth={1.5} /> Back
-              </Button>
-            )}
-            {step === "source" ? (
-              <Button
-                onClick={() => setStep("style")}
-                disabled={!url && !upload}
-                aria-label="Continue to style step"
-                className="h-12 flex-1 rounded-xl bg-gradient-to-b from-amber-400 to-amber-500 text-[15px] font-semibold text-zinc-950 shadow-[0_8px_30px_-10px_rgba(245,158,11,0.55)] transition-all hover:from-amber-300 hover:to-amber-400 active:scale-[0.98] disabled:opacity-40 disabled:shadow-none"
-              >
-                Choose style <ArrowRight className="ml-0.5 h-4 w-4" strokeWidth={1.5} />
-              </Button>
-            ) : (
-              <Button
-                onClick={generate}
-                disabled={submitting}
-                aria-label="Generate clips"
-                className="h-12 flex-1 rounded-xl bg-gradient-to-b from-amber-400 to-amber-500 text-[15px] font-semibold text-zinc-950 shadow-[0_8px_30px_-10px_rgba(245,158,11,0.55)] transition-all hover:from-amber-300 hover:to-amber-400 active:scale-[0.98] disabled:opacity-60 disabled:shadow-none"
-              >
-                {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" strokeWidth={1.5} /> : <Zap className="mr-1.5 h-4 w-4" strokeWidth={1.5} />}
-                Generate clips
-              </Button>
-            )}
+                {/* animated pill indicator */}
+                <span
+                  aria-hidden="true"
+                  className={`absolute inset-y-1.5 left-1.5 w-[calc(50%-0.375rem)] rounded-full bg-gradient-to-r from-violet-500/30 to-fuchsia-500/30 ring-1 ring-inset ring-white/10 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                    activeTab === "library" ? "translate-x-full" : "translate-x-0"
+                  }`}
+                />
+                <TabButton
+                  active={activeTab === "create"}
+                  label="Create"
+                  icon={Sparkles}
+                  onClick={() => goTab("create")}
+                />
+                <TabButton
+                  active={activeTab === "library"}
+                  label="Library"
+                  icon={LibraryIcon}
+                  onClick={() => goTab("library")}
+                />
+              </nav>
+            </div>
           </div>
         </div>
       )}
-
-      <footer className="border-t border-white/5 py-3">
-        <p className="text-center text-[10px] leading-relaxed text-zinc-600">
-          Autoclip — automatic viral clips with burned captions · renders on FFmpeg + Whisper
-        </p>
-      </footer>
     </div>
+  );
+}
+
+function TabButton({
+  active, label, icon: Icon, onClick,
+}: { active: boolean; label: string; icon: LucideIcon; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+      aria-label={`${label} tab`}
+      className="relative z-10 flex h-11 flex-1 items-center justify-center gap-2 rounded-full text-xs font-semibold transition-colors duration-200 active:scale-[0.97]"
+    >
+      <Icon className={`h-[18px] w-[18px] transition-colors duration-200 ${active ? "text-violet-200" : "text-zinc-500"}`} strokeWidth={1.5} />
+      <span className={active ? "text-white" : "text-zinc-400"}>{label}</span>
+    </button>
   );
 }

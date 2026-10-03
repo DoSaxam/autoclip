@@ -105,3 +105,13 @@ Full suite automated in `scripts/e2e_test.sh`:
 
 New fix: Cloudflare-403 on media sites → `curl_cffi` impersonation retry added to yt-dlp chain (`engine/pipeline.py`).
 UI/UX redesign verified in browser at 390×844 and 320×568: full flow walk, video readyState 4, zero console errors, no horizontal overflow.
+
+---
+
+## Session 3 (2026-10-03): YouTube relay + supervisor fixes + full UI rebuild — ALL PASS
+
+- **YouTube E2E via UI**: https://youtu.be/tXdD-eydL7k → loader.to relay (WARP UDP throttled by sandbox) → whisper 719s → 2-10 clips, real titles/scores, 1080×1920. Verified twice (API + browser).
+- **Supervisor crash fixed**: port_up() built wrong path for pot-server (/health instead of /ping) → KeyError 'pot' crash ~3s after boot → engine+supervisor died silently. Fixed + defaultdict backoff. Engine-kill self-heal re-verified.
+- **warp.py dual-address bug fixed**: dict overwrote duplicate Address lines → warp.conf lost IPv4.
+- **UI rebuilt from zero**: Aurora Glass design (violet→fuchsia gradients, glass cards, floating tab bar, pipeline visualization, shimmer skeletons). All functionality preserved; browser-verified at 390/320px, console clean.
+- E2E suite: 22/22 (scripts/e2e_test.sh).

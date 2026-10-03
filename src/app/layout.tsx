@@ -1,21 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import "./fonts.css";
 import { Toaster } from "@/components/ui/toaster";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter-sans",
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Autoclip — link to viral shorts",
+  title: "Autoclip — viral clips from any video",
   description:
     "Paste a video link or upload a file. Autoclip finds the best moments, adds animated captions and effects, and exports ready-to-post vertical clips.",
   keywords: ["Autoclip", "video clips", "shorts", "captions", "AI"],
@@ -25,7 +21,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#09090b",
+  themeColor: "#0B0B14",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -40,7 +36,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className="dark">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-zinc-950 text-zinc-100 selection:bg-amber-500/30 selection:text-amber-50`}
+        className={`${inter.variable} antialiased bg-[#0B0B14] text-zinc-100 selection:bg-violet-500/30 selection:text-violet-50`}
       >
         {children}
         <Toaster />

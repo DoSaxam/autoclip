@@ -61,11 +61,17 @@ def acquire_lock():
     return True
 
 
-def port_up(port, path="/engine/health", is_engine=True):
+def port_up(port, is_engine=True):
+    """Health-check a local service. Engine → /engine/health, bridge → /health,
+    pot-server → /ping."""
     import urllib.request
     if port == POT_PORT:
         path = "/ping"
-    url = f"http://127.0.0.1:{port}" + (path if is_engine else "/health")
+    elif is_engine:
+        path = "/engine/health"
+    else:
+        path = "/health"
+    url = f"http://127.0.0.1:{port}{path}"
     try:
         with urllib.request.urlopen(url, timeout=2) as r:
             return r.status == 200
@@ -160,7 +166,8 @@ def main():
         sys.exit(0)
     log("supervisor up")
     procs = {}
-    backoff = {"engine": 0, "bridge": 0}
+    from collections import defaultdict
+    backoff = defaultdict(float)  # missing key -> 0.0, never KeyError
 
     def shutdown(signum, frame):
         log("supervisor shutting down")

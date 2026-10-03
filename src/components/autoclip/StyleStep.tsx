@@ -3,24 +3,43 @@
 import { useRef } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
-import { PhonePreview } from "./PhonePreview";
+import { PhonePreview, PRESET_FONT_VAR } from "./PhonePreview";
 import {
   ClipSettings, PRESET_META, FONT_OPTIONS, ASPECTS, EFFECTS, api,
 } from "@/lib/autoclip";
 import {
-  Type, Sparkles, ImagePlus, Layers, ScanFace, Columns2, Check, UploadCloud,
+  Sparkles, Columns2, ScanFace, Check, UploadCloud, ChevronLeft, Type, ImagePlus,
+  Gauge, Sunset, Zap, ZoomIn, Activity, Vibrate, Grip, Focus, Clapperboard, Contrast, Blend,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-const CARD =
-  "rounded-2xl border border-white/5 bg-gradient-to-b from-zinc-900/70 to-zinc-900/30 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
+const EFFECT_ICONS: Record<string, LucideIcon> = {
+  progressBar: Gauge,
+  fadeInOut: Sunset,
+  flash: Zap,
+  pushIn: ZoomIn,
+  zoomPulse: Activity,
+  shake: Vibrate,
+  glow: Sparkles,
+  grain: Grip,
+  vignette: Focus,
+  cinematic: Clapperboard,
+  mono: Contrast,
+  rgbSplit: Blend,
+};
 
+/**
+ * Style studio — slides up as a full page over the Create screen.
+ * Sticky live preview on top; every control updates it instantly.
+ */
 export function StyleStep({
   settings,
   update,
+  onBack,
 }: {
   settings: ClipSettings;
   update: (patch: Partial<ClipSettings>) => void;
+  onBack: () => void;
 }) {
   const wmInput = useRef<HTMLInputElement>(null);
 
@@ -32,7 +51,14 @@ export function StyleStep({
     if (!f) return;
     try {
       const res = await api.uploadFile(f, "watermark");
-      update({ watermark: { path: res.path, size: settings.watermark?.size ?? 0.16, opacity: settings.watermark?.opacity ?? 0.85, pos: settings.watermark?.pos ?? "br" } });
+      update({
+        watermark: {
+          path: res.path,
+          size: settings.watermark?.size ?? 0.16,
+          opacity: settings.watermark?.opacity ?? 0.85,
+          pos: settings.watermark?.pos ?? "br",
+        },
+      });
     } catch (e) {
       console.error(e);
     }
@@ -42,13 +68,29 @@ export function StyleStep({
   const presetName = PRESET_META[settings.preset]?.name ?? "Custom";
 
   return (
-    <div className="space-y-5 pb-2">
-      {/* Sticky mini live preview — stays visible while scrolling options */}
+    <div className="space-y-4">
+      {/* top bar */}
+      <div className="flex items-center gap-3 pt-1">
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Back"
+          className="ac-focus glass flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-zinc-300 transition-transform duration-200 active:scale-95"
+        >
+          <ChevronLeft className="h-5 w-5" strokeWidth={1.5} />
+        </button>
+        <div className="min-w-0">
+          <h2 className="text-lg font-bold leading-tight tracking-tight text-white">Style studio</h2>
+          <p className="text-[11px] text-zinc-500">Every change previews live</p>
+        </div>
+      </div>
+
+      {/* sticky mini live preview — stays visible while scrolling options */}
       <div
         className="sticky z-10 -mx-4 px-4 py-1.5"
-        style={{ top: "calc(3.5rem + env(safe-area-inset-top) + 0.25rem)" }}
+        style={{ top: "calc(4rem + env(safe-area-inset-top) + 0.375rem)" }}
       >
-        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-zinc-950/90 p-2 pr-3.5 shadow-xl backdrop-blur-md">
+        <div className="glass-blur flex items-center gap-3 rounded-2xl p-2 pr-3">
           <div className="w-[52px] shrink-0">
             <PhonePreview
               aspect={settings.aspect}
@@ -60,85 +102,113 @@ export function StyleStep({
             />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-semibold text-zinc-100">
+            <p className="truncate text-[13px] font-semibold text-white">
               {presetName}
               <span className="font-normal text-zinc-500"> · {settings.aspect}</span>
             </p>
-            <p className="mt-0.5 truncate text-[10px] text-zinc-500">
-              font {Math.round((settings.fontScale ?? 1) * 100)}% · pos {settings.position}% · {onEffects} effect{onEffects === 1 ? "" : "s"} on
+            <p className="mt-0.5 truncate text-[10px] text-zinc-400">
+              {onEffects} effect{onEffects === 1 ? "" : "s"} · font {Math.round((settings.fontScale ?? 1) * 100)}% · pos {settings.position}%
             </p>
           </div>
-          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-amber-500/10 px-2 py-1 text-[10px] font-medium text-amber-400 ring-1 ring-inset ring-amber-500/20">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
+          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-violet-500/15 px-2.5 py-1 text-[10px] font-semibold text-violet-300 ring-1 ring-inset ring-violet-400/25">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-400" aria-hidden="true" />
             live
           </span>
         </div>
       </div>
 
+      {/* big live preview */}
+      <section aria-label="Live style preview" className="ac-rise flex justify-center py-1">
+        <div className="w-full max-w-[200px]">
+          <PhonePreview
+            aspect={settings.aspect}
+            preset={settings.preset}
+            font={settings.font}
+            position={settings.position}
+            fontScale={settings.fontScale}
+          />
+        </div>
+      </section>
+
       {/* Aspect ratio */}
-      <section aria-label="Aspect ratio" className={CARD}>
+      <section aria-label="Aspect ratio" className="glass ac-rise rounded-3xl p-4">
         <SectionTitle icon={<Columns2 className="h-4 w-4" strokeWidth={1.5} />} title="Aspect ratio" meta={`${ASPECTS.length} formats`} />
         <div className="grid grid-cols-4 gap-2">
           {ASPECTS.map((a) => {
             const selected = settings.aspect === a.id;
             const [aw, ah] = a.id.split(":").map(Number);
             const r = aw / ah;
-            const gh = r === 1 ? 13 : r > 1 ? Math.round(20 / r) : 16;
-            const gw = r === 1 ? 13 : r > 1 ? 20 : Math.round(16 * r);
+            const gh = r === 1 ? 14 : r > 1 ? Math.round(22 / r) : 18;
+            const gw = r === 1 ? 14 : r > 1 ? 22 : Math.round(18 * r);
             return (
               <button
+                type="button"
                 key={a.id}
                 onClick={() => update({ aspect: a.id })}
-                className={`flex min-h-[60px] flex-col items-center justify-center gap-1.5 rounded-xl border transition-all duration-200 active:scale-[0.96] ${
+                className={`flex min-h-[72px] flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-200 active:scale-[0.95] ${
                   selected
-                    ? "border-amber-500/70 bg-amber-500/10 ring-2 ring-amber-500/40"
-                    : "border-white/5 bg-zinc-900/60 hover:border-zinc-600/60"
+                    ? "border-violet-400/60 bg-gradient-to-b from-violet-500/15 to-fuchsia-500/10 shadow-[0_0_20px_-6px_rgba(139,92,246,0.5)]"
+                    : "border-white/10 bg-white/[0.03] hover:border-white/20"
                 }`}
                 aria-pressed={selected}
                 aria-label={`Aspect ratio ${a.label}`}
               >
-                <span className="flex h-4 items-center justify-center" aria-hidden="true">
+                <span className="flex h-[22px] items-center justify-center" aria-hidden="true">
                   <span
-                    className={`rounded-[3px] border-[1.5px] transition-colors ${selected ? "border-amber-400 bg-amber-500/25" : "border-zinc-500 bg-zinc-700/40"}`}
+                    className={`rounded-[4px] border-[1.5px] transition-colors ${
+                      selected ? "border-violet-300 bg-violet-400/30" : "border-zinc-600 bg-white/[0.04]"
+                    }`}
                     style={{ width: `${gw}px`, height: `${gh}px` }}
                   />
                 </span>
-                <span className={`text-xs font-bold ${selected ? "text-amber-300" : "text-zinc-300"}`}>{a.label}</span>
+                <span className={`text-[11px] font-bold ${selected ? "text-violet-100" : "text-zinc-400"}`}>{a.label}</span>
               </button>
             );
           })}
         </div>
-        <p className="mt-2 text-[11px] text-zinc-500">{ASPECTS.find((a) => a.id === settings.aspect)?.sub}</p>
+        <p className="mt-2.5 text-[11px] text-zinc-500">
+          {ASPECTS.find((a) => a.id === settings.aspect)?.sub}
+        </p>
       </section>
 
-      {/* Caption preset */}
-      <section aria-label="Caption preset" className={CARD}>
-        <SectionTitle icon={<Sparkles className="h-4 w-4" strokeWidth={1.5} />} title="Caption style" meta={`${Object.keys(PRESET_META).length} presets`} />
-        <div className="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* Caption preset + font override + size & position */}
+      <section aria-label="Caption style" className="glass ac-rise rounded-3xl p-4">
+        <SectionTitle
+          icon={<Sparkles className="h-4 w-4" strokeWidth={1.5} />}
+          title="Caption style"
+          meta={`${Object.keys(PRESET_META).length} presets`}
+        />
+        <div className="grid grid-cols-2 gap-2">
           {Object.entries(PRESET_META).map(([id, pm]) => {
             const selected = settings.preset === id;
             return (
               <button
+                type="button"
                 key={id}
                 onClick={() => update({ preset: id, font: null })}
-                className={`flex w-[82px] shrink-0 snap-start flex-col items-center gap-1 rounded-xl border px-1.5 py-3 transition-all duration-200 active:scale-[0.95] ${
+                className={`relative flex min-h-[84px] flex-col items-center justify-center gap-1.5 rounded-2xl border px-2 py-3 transition-all duration-200 active:scale-[0.96] ${
                   selected
-                    ? "border-amber-500/70 bg-amber-500/10 ring-2 ring-amber-500/40"
-                    : "border-white/5 bg-zinc-900/60 hover:border-zinc-600/60"
+                    ? "border-violet-400/60 bg-gradient-to-b from-violet-500/15 to-fuchsia-500/10 ring-1 ring-violet-400/40"
+                    : "border-white/10 bg-white/[0.03] hover:border-white/20"
                 }`}
                 aria-pressed={selected}
                 aria-label={`Caption preset ${pm.name}`}
               >
+                {selected && (
+                  <span
+                    className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-[0_4px_12px_-4px_rgba(139,92,246,0.9)]"
+                    aria-hidden="true"
+                  >
+                    <Check className="h-3 w-3" strokeWidth={3} />
+                  </span>
+                )}
                 <span
-                  className={`${pm.css} block min-h-[22px] text-base leading-tight`}
-                  style={{ fontFamily: `var(--fc-${id === "karaoke" ? "inter" : id === "hormozi" ? "archivo" : id === "marker" ? "marker" : id})` }}
+                  className={`${pm.css} px-1 text-center text-[15px] leading-tight`}
+                  style={{ fontFamily: `var(--fc-${PRESET_FONT_VAR[id] ?? "inter"}, sans-serif)` }}
                 >
                   {pm.name}
                 </span>
-                <span className="flex h-4 items-center gap-0.5 text-[10px] font-medium text-zinc-500">
-                  {selected ? <Check className="h-3 w-3 text-amber-400" strokeWidth={2.5} /> : null}
-                  <span className="max-w-[62px] truncate">{pm.font}</span>
-                </span>
+                <span className="text-[10px] font-medium text-zinc-500">{pm.font}</span>
               </button>
             );
           })}
@@ -146,14 +216,15 @@ export function StyleStep({
 
         {/* Font override */}
         <div className="mt-4">
-          <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Font override</label>
-          <div className="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Font override</p>
+          <div className="no-scrollbar -mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1">
             <button
+              type="button"
               onClick={() => update({ font: null })}
-              className={`min-h-[44px] shrink-0 snap-start rounded-xl border px-3.5 py-2 text-xs font-semibold transition-all duration-200 active:scale-[0.96] ${
+              className={`min-h-[44px] shrink-0 snap-start rounded-2xl border px-3.5 py-2 text-xs font-semibold transition-all duration-200 active:scale-[0.96] ${
                 !settings.font
-                  ? "border-amber-500/70 bg-amber-500/10 text-amber-300 ring-2 ring-amber-500/40"
-                  : "border-white/5 bg-zinc-900/60 text-zinc-400 hover:border-zinc-600/60"
+                  ? "border-violet-400/50 bg-gradient-to-b from-violet-500/20 to-fuchsia-500/15 text-violet-100 ring-1 ring-violet-400/40"
+                  : "border-white/10 bg-white/[0.03] text-zinc-400 hover:border-white/20"
               }`}
               aria-pressed={!settings.font}
             >
@@ -163,15 +234,16 @@ export function StyleStep({
               const selected = settings.font === f.id;
               return (
                 <button
+                  type="button"
                   key={f.id}
                   onClick={() => update({ font: f.id })}
-                  className={`min-h-[44px] shrink-0 snap-start rounded-xl border px-3.5 py-2 text-sm transition-all duration-200 active:scale-[0.96] ${
+                  className={`min-h-[44px] shrink-0 snap-start rounded-2xl border px-3.5 py-2 text-sm transition-all duration-200 active:scale-[0.96] ${
                     selected
-                      ? "border-amber-500/70 bg-amber-500/10 text-amber-300 ring-2 ring-amber-500/40"
-                      : "border-white/5 bg-zinc-900/60 text-zinc-300 hover:border-zinc-600/60"
+                      ? "border-violet-400/50 bg-gradient-to-b from-violet-500/20 to-fuchsia-500/15 text-violet-100 ring-1 ring-violet-400/40"
+                      : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/20"
                   }`}
                   aria-pressed={selected}
-                  style={{ fontFamily: `${f.css.includes("fc") ? `var(--fc-${f.id})` : "inherit"}, sans-serif` }}
+                  style={{ fontFamily: `var(--fc-${f.id}, sans-serif)` }}
                 >
                   {f.name}
                 </button>
@@ -180,14 +252,12 @@ export function StyleStep({
           </div>
         </div>
 
-        {/* Font size + position */}
-        <div className="mt-4 space-y-4">
+        {/* Size & position */}
+        <div className="mt-5 space-y-5">
           <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-medium text-zinc-300">Font size</span>
-              <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-amber-300">
-                {Math.round((settings.fontScale ?? 1) * 100)}%
-              </span>
+            <div className="mb-2.5 flex items-center justify-between">
+              <span className="text-[13px] font-medium text-zinc-300">Caption size</span>
+              <ValuePill value={`${Math.round((settings.fontScale ?? 1) * 100)}%`} />
             </div>
             <Slider
               value={[settings.fontScale ?? 1]}
@@ -195,15 +265,13 @@ export function StyleStep({
               max={1.6}
               step={0.05}
               onValueChange={([v]) => update({ fontScale: v })}
-              aria-label="Font size"
+              aria-label="Caption size"
             />
           </div>
           <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-medium text-zinc-300">Caption position (top → bottom)</span>
-              <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-amber-300">
-                {settings.position}%
-              </span>
+            <div className="mb-2.5 flex items-center justify-between">
+              <span className="text-[13px] font-medium text-zinc-300">Caption position</span>
+              <ValuePill value={`${settings.position}%`} />
             </div>
             <Slider
               value={[settings.position]}
@@ -215,55 +283,43 @@ export function StyleStep({
             />
           </div>
         </div>
-
-        <div className="mt-5 max-w-[170px]">
-          <PhonePreview
-            aspect={settings.aspect}
-            preset={settings.preset}
-            font={settings.font}
-            position={settings.position}
-            fontScale={settings.fontScale}
-          />
-        </div>
       </section>
 
       {/* Effects */}
-      <section aria-label="Effects" className={CARD}>
+      <section aria-label="Effects" className="glass ac-rise rounded-3xl p-4">
         <SectionTitle
-          icon={<Layers className="h-4 w-4" strokeWidth={1.5} />}
+          icon={<Activity className="h-4 w-4" strokeWidth={1.5} />}
           title="Effects"
           meta={onEffects > 0 ? `${onEffects} of ${EFFECTS.length} on` : `${EFFECTS.length} available`}
         />
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {EFFECTS.map((fx) => {
             const on = !!settings.effects[fx.id];
+            const Icon = EFFECT_ICONS[fx.id] ?? Sparkles;
             return (
               <button
+                type="button"
                 key={fx.id}
                 onClick={() => toggleEffect(fx.id, !on)}
-                className={`flex min-h-[60px] items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition-all duration-200 active:scale-[0.97] ${
-                  on ? "border-amber-500/50 bg-amber-500/[0.08]" : "border-white/5 bg-zinc-900/60 hover:border-zinc-600/60"
+                title={fx.desc}
+                className={`flex min-h-[68px] flex-col items-center justify-center gap-1.5 rounded-2xl border px-1 py-2.5 transition-all duration-200 active:scale-[0.94] ${
+                  on
+                    ? "border-violet-400/50 bg-gradient-to-b from-violet-500/25 to-fuchsia-500/20 text-violet-100 shadow-[0_6px_20px_-8px_rgba(139,92,246,0.6)]"
+                    : "border-white/10 bg-white/[0.03] text-zinc-400 hover:border-white/20"
                 }`}
                 aria-pressed={on}
+                aria-label={`${fx.name} — ${fx.desc}`}
               >
-                <span className="min-w-0">
-                  <span className={`block text-sm font-semibold leading-tight ${on ? "text-amber-300" : "text-zinc-300"}`}>{fx.name}</span>
-                  <span className="block text-[10px] leading-tight text-zinc-500">{fx.desc}</span>
-                </span>
-                {/* animated mini switch */}
-                <span aria-hidden="true" className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-300 ${on ? "bg-amber-500" : "bg-zinc-700/90"}`}>
-                  <span
-                    className={`absolute left-[3px] top-1/2 size-[18px] -translate-y-1/2 rounded-full bg-white shadow transition-transform duration-300 ${on ? "translate-x-[20px]" : "translate-x-0"}`}
-                  />
-                </span>
+                <Icon className={`h-[18px] w-[18px] ${on ? "text-violet-200" : "text-zinc-500"}`} strokeWidth={1.5} />
+                <span className="text-center text-[10px] font-semibold leading-tight">{fx.name}</span>
               </button>
             );
           })}
         </div>
       </section>
 
-      {/* Tracking + layout */}
-      <section aria-label="Smart framing" className={CARD}>
+      {/* Smart framing */}
+      <section aria-label="Smart framing" className="glass ac-rise rounded-3xl p-4">
         <SectionTitle icon={<ScanFace className="h-4 w-4" strokeWidth={1.5} />} title="Smart framing" meta="AI" />
         <div className="space-y-2.5">
           <ToggleRow
@@ -282,25 +338,28 @@ export function StyleStep({
       </section>
 
       {/* Watermark */}
-      <section aria-label="Watermark" className={CARD}>
+      <section aria-label="Watermark" className="glass ac-rise rounded-3xl p-4">
         <SectionTitle icon={<ImagePlus className="h-4 w-4" strokeWidth={1.5} />} title="Watermark" meta="optional" />
         {settings.watermark?.path ? (
-          <div className="space-y-3 rounded-xl border border-white/5 bg-zinc-950/50 p-3">
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2 text-sm text-zinc-200">
-                <Type className="h-4 w-4 text-emerald-400" strokeWidth={1.5} />
+          <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2 text-[13px] font-medium text-zinc-200">
+                <Type className="h-4 w-4 text-emerald-300" strokeWidth={1.5} aria-hidden="true" />
                 Watermark ready
               </span>
-              <Button variant="ghost" size="sm" className="h-9 rounded-lg text-xs text-zinc-400 hover:text-red-300" onClick={() => update({ watermark: null })}>
+              <button
+                type="button"
+                onClick={() => update({ watermark: null })}
+                aria-label="Remove watermark"
+                className="ac-hit flex h-9 items-center rounded-xl px-3 text-xs font-medium text-zinc-400 transition-colors hover:text-red-300"
+              >
                 Remove
-              </Button>
+              </button>
             </div>
             <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-xs font-medium text-zinc-300">Size</span>
-                <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-amber-300">
-                  {Math.round((settings.watermark.size ?? 0.16) * 100)}%
-                </span>
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[13px] font-medium text-zinc-300">Size</span>
+                <ValuePill value={`${Math.round((settings.watermark.size ?? 0.16) * 100)}%`} />
               </div>
               <Slider
                 value={[settings.watermark.size ?? 0.16]}
@@ -312,11 +371,9 @@ export function StyleStep({
               />
             </div>
             <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-xs font-medium text-zinc-300">Opacity</span>
-                <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-amber-300">
-                  {Math.round((settings.watermark.opacity ?? 0.85) * 100)}%
-                </span>
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[13px] font-medium text-zinc-300">Opacity</span>
+                <ValuePill value={`${Math.round((settings.watermark.opacity ?? 0.85) * 100)}%`} />
               </div>
               <Slider
                 value={[settings.watermark.opacity ?? 0.85]}
@@ -335,11 +392,15 @@ export function StyleStep({
               type="file"
               accept="image/png,image/jpeg,image/webp"
               className="hidden"
-              onChange={(e) => pickWatermark(e.target.files?.[0])}
+              onChange={(e) => {
+                pickWatermark(e.target.files?.[0]);
+                e.target.value = "";
+              }}
             />
             <button
+              type="button"
               onClick={() => wmInput.current?.click()}
-              className="ac-focus group flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 bg-zinc-950/50 py-3 text-sm font-medium text-zinc-400 transition-all duration-200 hover:border-amber-500/40 hover:text-amber-400 active:scale-[0.99]"
+              className="ac-focus group flex min-h-[56px] w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-white/15 bg-white/[0.02] py-3.5 text-sm font-medium text-zinc-400 transition-all duration-200 hover:border-violet-400/50 hover:text-violet-200 active:scale-[0.99]"
             >
               <UploadCloud className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5" strokeWidth={1.5} />
               Upload watermark (PNG)
@@ -351,17 +412,28 @@ export function StyleStep({
   );
 }
 
+function ValuePill({ value }: { value: string }) {
+  return (
+    <span className="rounded-full border border-violet-400/30 bg-violet-500/15 px-2.5 py-1 text-[11px] font-bold tabular-nums text-violet-200">
+      {value}
+    </span>
+  );
+}
+
 function SectionTitle({
   icon, title, meta,
 }: { icon: React.ReactNode; title: string; meta?: string }) {
   return (
-    <div className="mb-3 flex items-center justify-between gap-2">
-      <h2 className="flex items-center gap-2 text-[13px] font-semibold text-zinc-100">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 ring-1 ring-inset ring-amber-500/20">
+    <div className="mb-3.5 flex items-center justify-between gap-2">
+      <h3 className="flex items-center gap-2.5 text-sm font-semibold text-white">
+        <span
+          className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-[0_6px_18px_-6px_rgba(139,92,246,0.8)]"
+          aria-hidden="true"
+        >
           {icon}
         </span>
         {title}
-      </h2>
+      </h3>
       {meta && <span className="text-[10px] font-medium text-zinc-500">{meta}</span>}
     </div>
   );
@@ -371,10 +443,14 @@ function ToggleRow({
   label, desc, checked, onChange,
 }: { label: string; desc: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div className={`flex min-h-[56px] items-center justify-between gap-3 rounded-xl border px-3 py-2.5 transition-colors duration-200 ${checked ? "border-amber-500/40 bg-amber-500/[0.06]" : "border-white/5 bg-zinc-900/60"}`}>
+    <div
+      className={`flex min-h-[64px] items-center justify-between gap-3 rounded-2xl border px-3.5 py-3 transition-colors duration-200 ${
+        checked ? "border-violet-400/40 bg-violet-500/[0.07]" : "border-white/10 bg-white/[0.03]"
+      }`}
+    >
       <div className="min-w-0">
-        <div className="text-sm font-medium text-zinc-200">{label}</div>
-        <div className="text-[10px] leading-tight text-zinc-500">{desc}</div>
+        <div className="text-sm font-medium text-zinc-100">{label}</div>
+        <div className="mt-0.5 text-[10px] leading-tight text-zinc-500">{desc}</div>
       </div>
       <Switch checked={checked} onCheckedChange={onChange} aria-label={label} />
     </div>

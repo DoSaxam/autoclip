@@ -1,69 +1,80 @@
 {
-  "name": "Autoclip Design Tokens",
-  "description": "Mobile-first (390px) design system for the Autoclip video-clipping app. Dark, cinematic, high-contrast; amber accent (no blue/indigo per brand rules).",
+  "name": "Autoclip Design Tokens — Aurora Glass",
+  "description": "Mobile-first (390px) design system for the Autoclip video-clipping app, rebuilt from zero. Deep space-dark aurora background, electric violet→fuchsia gradient accents, glassmorphism surfaces, native-app shell with floating tab bar.",
   "color": {
-    "background": { "value": "#09090b", "token": "zinc-950", "usage": "app background" },
-    "surface": { "value": "#18181b", "token": "zinc-900", "usage": "cards, input fields" },
-    "surfaceRaised": { "value": "#27272a", "token": "zinc-800", "usage": "chips, progress track" },
-    "border": { "value": "#27272a", "token": "zinc-800", "usage": "card borders (subtle)" },
-    "borderStrong": { "value": "#3f3f46", "token": "zinc-700", "usage": "buttons, dividers" },
-    "textPrimary": { "value": "#f4f4f5", "token": "zinc-100", "usage": "headings, titles" },
-    "textSecondary": { "value": "#a1a1aa", "token": "zinc-400", "usage": "body, labels" },
-    "textMuted": { "value": "#71717a", "token": "zinc-500", "usage": "hints, timestamps" },
-    "accent": { "value": "#f59e0b", "token": "amber-500", "usage": "primary actions, active states, logo" },
-    "accentHover": { "value": "#fbbf24", "token": "amber-400", "usage": "action hover" },
-    "accentText": { "value": "#000000", "usage": "text on amber buttons" },
-    "accentSoft": { "value": "rgba(245,158,11,0.10)", "usage": "active chip/toggle background" },
-    "success": { "value": "#10b981", "token": "emerald-500", "usage": "done state, online dot, progress bar fill" },
-    "danger": { "value": "#ef4444", "token": "red-500", "usage": "failed state, beast captions" },
-    "info": { "value": "#facc15", "token": "yellow-400", "usage": "hormozi captions, scores" }
+    "background": { "value": "#0B0B14", "usage": "app background (radial gradient to #12121F)" },
+    "surface": { "value": "rgba(255,255,255,0.04)", "usage": "glass cards — static, no blur on large surfaces" },
+    "surfaceChrome": { "value": "rgba(255,255,255,0.06) + backdrop-blur-xl", "usage": "header/tab bar/dialog chrome only" },
+    "border": { "value": "rgba(255,255,255,0.10)", "usage": "glass card borders" },
+    "borderHighlight": { "value": "rgba(255,255,255,0.20)", "usage": "inner top highlight on glass" },
+    "textPrimary": { "value": "#F4F4F5", "usage": "headings, titles" },
+    "textSecondary": { "value": "#A1A1AA", "usage": "body, labels" },
+    "textMuted": { "value": "#71717A", "usage": "hints, timestamps" },
+    "gradient": {
+      "primary": { "value": "linear-gradient(135deg, #8B5CF6, #D946EF)", "usage": "CTA buttons, active states, logo tile, score badges" },
+      "heroText": { "value": "bg-clip-text transparent, #A78BFA → #E879F9", "usage": "hero headline words" },
+      "progressLine": { "value": "#8B5CF6 → #D946EF", "usage": "pipeline progress line, sliders" }
+    },
+    "accentSecondary": { "value": "#22D3EE", "token": "cyan-400", "usage": "sparingly — live dot, info chips" },
+    "success": { "value": "#10B981", "token": "emerald-500", "usage": "done state, engine online" },
+    "danger": { "value": "#EF4444", "token": "red-500", "usage": "failed state, destructive" }
   },
   "typography": {
-    "uiFamily": "Geist Sans (system fallback)",
+    "uiFamily": "Inter (system fallback)",
     "captionFonts": {
       "heavy": ["Inter Black", "Anton", "Archivo Black", "Montserrat Black", "Rubik Black", "Kanit Black", "Alfa Slab One", "Sigmar One", "Oswald", "Bebas Neue", "Poppins ExtraBold", "Lexend ExtraBold", "Passion One Bold", "Titan One", "Luckiest Guy", "Fredoka SemiBold"],
       "expressive": ["Bangers", "Creepster", "Righteous"],
       "handwritten": ["Permanent Marker", "Lobster", "Pacifico"]
     },
     "scale": {
-      "display": "15px/700 (app title)",
-      "h1": "15px/700",
+      "display": "28px/800 gradient (hero)",
+      "h1": "17px/700",
       "h2": "14px/600 (section titles)",
       "body": "13-14px/400-500",
       "caption": "11px/400",
-      "micro": "10px/400 (metadata, chips)"
+      "micro": "10px/400 (metadata, chips)",
+      "percentReadout": "56px/800 tabular-nums (generate screen)"
     }
   },
   "spacing": {
     "base": 4,
-    "cardPadding": "16px (p-4)",
-    "sectionGap": "24px (space-y-6)",
+    "cardPadding": "16-20px",
+    "sectionGap": "24px",
     "screenPadding": "16px (px-4)",
-    "touchTarget": "44px minimum (buttons h-11/h-12, chips min-h-[44px])"
+    "touchTarget": "44px minimum; primary CTA 56px"
   },
   "radius": {
-    "chip": "8px (rounded-lg)",
-    "card": "16px (rounded-2xl)",
-    "phonePreview": "26px (rounded-[1.6rem])",
-    "pill": "9999px (rounded-full)"
+    "chip": "12px",
+    "card": "24px (rounded-3xl glass)",
+    "phonePreview": "28px",
+    "tabBar": "9999px floating pill",
+    "pill": "9999px"
   },
   "motion": {
+    "pageTransition": "fade+slide-up 240ms cubic-bezier(0.22,1,0.36,1)",
+    "stagger": "60ms card entrance increments",
+    "press": "active:scale-[0.95]",
+    "shimmer": "violet-tinted skeleton loop",
+    "radarPing": "engine status pulse 2s",
+    "stagePulse": "current pipeline node gradient pulse",
+    "ctaRing": "animated gradient border on primary CTA",
     "presetAnimations": {
       "karaoke": "word highlight follows speech timing",
       "pop": "scale 0→115%→100% in 220ms",
       "bounce": "scaleY 0→112%→92%→100% in 420ms",
       "wobble": "rotation ±6° oscillation 600ms",
       "rainbow": "hue cycle per word 400ms",
-      "typewriter": "alpha reveal synced to word starts (60ms fade)",
+      "typewriter": "alpha reveal synced to word starts",
       "slide": "move from -60% x to center in 240ms",
       "elastic": "scale 60→110→90→105→100% in 460ms"
     },
-    "transitions": "150-250ms ease for UI state changes"
+    "reducedMotion": "all keyframes disabled via prefers-reduced-motion"
   },
   "layout": {
     "maxWidth": "448px (max-w-md) centered",
-    "header": "sticky top, 56px, blur backdrop",
-    "bottomBar": "sticky bottom, 48px + safe-area inset",
+    "header": "fixed, 64px glass, gradient logo tile, engine-status radar pill",
+    "tabBar": "floating detached glass pill, 2 tabs (Create/Library), animated indicator, safe-area bottom",
+    "generateScreen": "full-screen, tab bar hidden, pipeline viz hero",
     "videoAspect": { "9:16": "1080x1920", "1:1": "1080x1080", "4:5": "1080x1350", "16:9": "1920x1080" }
   },
   "iconography": {

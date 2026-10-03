@@ -1,0 +1,695 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→import { useCallback, useEffect, useRef, useState } from "react";
+     4→     4→import { Slider } from "@/components/ui/slider";
+     5→     5→import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+     6→     6→import { Textarea } from "@/components/ui/textarea";
+     7→     7→import { useToast } from "@/hooks/use-toast";
+     8→     8→import {
+     9→     9→  Job, Clip, ClipSettings, api, clipFileUrl, zipUrl, formatBytes, formatDur, ENGINE_PORT,
+    10→    10→} from "@/lib/autoclip";
+    11→    11→import {
+    12→    12→  Download, FileArchive, Loader2, RefreshCw, X, Play, Eye, ClipboardList, HardDrive,
+    13→    13→  AlertTriangle, CheckCircle2, Clock, Check, Film, Star, Sparkles, ChevronLeft,
+    14→    14→  ArrowDownToLine, AudioLines, ScanSearch, Clapperboard, PartyPopper, Zap,
+    15→    15→} from "lucide-react";
+    16→    16→import type { LucideIcon } from "lucide-react";
+    17→    17→
+    18→    18→const STAGE_LABELS: Record<string, string> = {
+    19→    19→  download: "Downloading source",
+    20→    20→  transcribe: "Transcribing speech",
+    21→    21→  analyze: "Finding viral moments",
+    22→    22→  render: "Rendering clips",
+    23→    23→  upload: "Uploading",
+    24→    24→  done: "Done",
+    25→    25→};
+    26→    26→const STAGES = ["download", "transcribe", "analyze", "render"] as const;
+    27→    27→const STAGE_SHORT: Record<string, string> = {
+    28→    28→  download: "Download",
+    29→    29→  transcribe: "Transcribe",
+    30→    30→  analyze: "Analyze",
+    31→    31→  render: "Render",
+    32→    32→};
+    33→    33→const STAGE_ICON: Record<string, LucideIcon> = {
+    34→    34→  download: ArrowDownToLine,
+    35→    35→  transcribe: AudioLines,
+    36→    36→  analyze: ScanSearch,
+    37→    37→  render: Clapperboard,
+    38→    38→};
+    39→    39→
+    40→    40→export function GenerateView({
+    41→    41→  job,
+    42→    42→  settings,
+    43→    43→  onCancel,
+    44→    44→  onRetry,
+    45→    45→  onRerender,
+    46→    46→  onOpenStyle,
+    47→    47→  onNew,
+    48→    48→  onBack,
+    49→    49→}: {
+    50→    50→  job: Job;
+    51→    51→  settings: ClipSettings;
+    52→    52→  onCancel: () => void;
+    53→    53→  onRetry: () => void;
+    54→    54→  onRerender: (settings: ClipSettings) => void;
+    55→    55→  onOpenStyle: () => void;
+    56→    56→  onNew: () => void;
+    57→    57→  onBack: () => void;
+    58→    58→}) {
+    59→    59→  const { toast } = useToast();
+    60→    60→  const active = ["queued", "downloading", "transcribing", "analyzing", "rendering", "uploading"].includes(job.status);
+    61→    61→  const failed = job.status === "failed" || job.status === "failed_permanent";
+    62→    62→  const done = job.status === "done";
+    63→    63→  const [liveOpen, setLiveOpen] = useState(false);
+    64→    64→  const [editorOpen, setEditorOpen] = useState(false);
+    65→    65→  const [confirmCancel, setConfirmCancel] = useState(false);
+    66→    66→  const [now, setNow] = useState(() => Date.now());
+    67→    67→
+    68→    68→  const timings = job.stage_timings || {};
+    69→    69→  const progress = job.progress ?? 0;
+    70→    70→  const indeterminate = active && (job.status === "queued" || progress <= 0.001);
+    71→    71→
+    72→    72→  // ticking clock for elapsed / ETA readouts (presentational only)
+    73→    73→  useEffect(() => {
+    74→    74→    if (!active) return;
+    75→    75→    const id = setInterval(() => setNow(Date.now()), 1000);
+    76→    76→    return () => clearInterval(id);
+    77→    77→  }, [active]);
+    78→    78→
+    79→    79→  // cancel needs a second tap within 3s — protects against accidental taps
+    80→    80→  useEffect(() => {
+    81→    81→    if (!confirmCancel) return;
+    82→    82→    const id = setTimeout(() => setConfirmCancel(false), 3000);
+    83→    83→    return () => clearTimeout(id);
+    84→    84→  }, [confirmCancel]);
+    85→    85→
+    86→    86→  const startMs = job.start_time > 1e12 ? job.start_time : job.start_time * 1000;
+    87→    87→  const elapsedSec = active && startMs > 0 ? Math.max(0, (now - startMs) / 1000) : 0;
+    88→    88→  const etaSec = active && progress > 0.08 && progress < 0.95 && elapsedSec > 3
+    89→    89→    ? (elapsedSec * (1 - progress)) / progress
+    90→    90→    : null;
+    91→    91→
+    92→    92→  const cancelClick = () => {
+    93→    93→    if (!confirmCancel) {
+    94→    94→      setConfirmCancel(true);
+    95→    95→      return;
+    96→    96→    }
+    97→    97→    setConfirmCancel(false);
+    98→    98→    onCancel();
+    99→    99→  };
+   100→   100→
+   101→   101→  // pipeline line fill: reaches the current stage node (1.0 when finished)
+   102→   102→  const stageIdx = STAGES.indexOf(job.stage as typeof STAGES[number]);
+   103→   103→  const lineFrac = done ? 1 : Math.max(0, Math.min(3, stageIdx)) / 3;
+   104→   104→
+   105→   105→  // skeleton placeholders while clips render (n = expected clips)
+   106→   106→  const expected = settings.clip.maxClips === "auto" ? 3 : parseInt(settings.clip.maxClips, 10) || 3;
+   107→   107→  const rendering = active && job.status === "rendering";
+   108→   108→  const skeletons = rendering ? Math.max(0, expected - (job.clips?.length ?? 0)) : 0;
+   109→   109→
+   110→   110→  return (
+   111→   111→    <div className="space-y-4 pb-4">
+   112→   112→      {/* top bar: back + title */}
+   113→   113→      <div className="flex items-center gap-3 pt-1">
+   114→   114→        <button
+   115→   115→          type="button"
+   116→   116→          onClick={onBack}
+   117→   117→          aria-label="Back"
+   118→   118→          className="ac-focus glass flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-zinc-300 transition-transform duration-200 active:scale-95"
+   119→   119→        >
+   120→   120→          <ChevronLeft className="h-5 w-5" strokeWidth={1.5} />
+   121→   121→        </button>
+   122→   122→        <div className="min-w-0">
+   123→   123→          <h2 className="truncate text-[15px] font-bold leading-tight tracking-tight text-white">
+   124→   124→            {active ? "Generating clips" : failed ? "Job failed" : job.status === "canceled" ? "Canceled" : "Clips ready"}
+   125→   125→          </h2>
+   126→   126→          <p className="truncate text-[11px] text-zinc-500">
+   127→   127→            {job.video_title || job.source_url || "Uploaded video"}
+   128→   128→          </p>
+   129→   129→        </div>
+   130→   130→      </div>
+   131→   131→
+   132→   132→      {/* ACTIVE — pipeline hero */}
+   133→   133→      {active && (
+   134→   134→        <section aria-label="Job status" className="glass ac-rise overflow-hidden rounded-3xl">
+   135→   135→          <div className="p-5">
+   136→   136→            {/* pipeline visualization */}
+   137→   137→            <div
+   138→   138→              className="relative mx-auto max-w-[310px]"
+   139→   139→              role="progressbar"
+   140→   140→              aria-valuenow={Math.round(progress * 100)}
+   141→   141→              aria-valuemin={0}
+   142→   142→              aria-valuemax={100}
+   143→   143→              aria-label={STAGE_LABELS[job.stage] || job.stage}
+   144→   144→            >
+   145→   145→              <div className="relative flex items-start justify-between">
+   146→   146→                {/* base track + gradient fill between node centers */}
+   147→   147→                <span aria-hidden="true" className="absolute left-[12.5%] right-[12.5%] top-[22px] h-[3px] rounded-full bg-white/10" />
+   148→   148→                <span
+   149→   149→                  aria-hidden="true"
+   150→   150→                  className="absolute left-[12.5%] top-[22px] h-[3px] rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all duration-700 ease-out"
+   151→   151→                  style={{ width: `${75 * lineFrac}%` }}
+   152→   152→                />
+   153→   153→                {STAGES.map((s, i) => {
+   154→   154→                  const stageDone = timings[s] !== undefined;
+   155→   155→                  // when queued (stage not yet known) the first node pulses to show liveness
+   156→   156→                  const current = job.stage === s || (job.status === "queued" && i === 0);
+   157→   157→                  const Icon = STAGE_ICON[s];
+   158→   158→                  return (
+   159→   159→                    <div key={s} className="relative z-10 flex w-[56px] flex-col items-center gap-1.5">
+   160→   160→                      <span
+   161→   161→                        className={`flex h-11 w-11 items-center justify-center rounded-2xl border transition-all duration-300 ${
+   162→   162→                          stageDone
+   163→   163→                            ? "border-transparent bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-[0_6px_18px_-6px_rgba(139,92,246,0.8)]"
+   164→   164→                            : current
+   165→   165→                              ? "ac-glow border-violet-400/60 bg-violet-500/15 text-violet-200"
+   166→   166→                              : "border-white/10 bg-white/[0.03] text-zinc-600"
+   167→   167→                        }`}
+   168→   168→                      >
+   169→   169→                        {stageDone ? (
+   170→   170→                          <Check className="h-5 w-5" strokeWidth={2.5} />
+   171→   171→                        ) : (
+   172→   172→                          <Icon className="h-5 w-5" strokeWidth={1.5} />
+   173→   173→                        )}
+   174→   174→                      </span>
+   175→   175→                      <span className={`text-[10px] font-semibold leading-none ${current ? "text-violet-200" : stageDone ? "text-zinc-300" : "text-zinc-600"}`}>
+   176→   176→                        {STAGE_SHORT[s]}
+   177→   177→                      </span>
+   178→   178→                      <span className="text-[10px] leading-none tabular-nums text-zinc-600">
+   179→   179→                        {stageDone && timings[s] !== undefined ? formatDur(timings[s]) : i + 1}
+   180→   180→                      </span>
+   181→   181→                    </div>
+   182→   182→                  );
+   183→   183→                })}
+   184→   184→              </div>
+   185→   185→            </div>
+   186→   186→
+   187→   187→            {/* giant % readout */}
+   188→   188→            <div className="mt-7 text-center">
+   189→   189→              <div className="flex items-baseline justify-center gap-1">
+   190→   190→                <span className="ac-text-grad text-[56px] font-extrabold leading-none tracking-tight tabular-nums">
+   191→   191→                  {Math.round(progress * 100)}
+   192→   192→                </span>
+   193→   193→                <span className="text-lg font-bold text-violet-300/70">%</span>
+   194→   194→              </div>
+   195→   195→              <p className="mt-2.5 text-[12px] leading-relaxed text-zinc-400">
+   196→   196→                {job.message || STAGE_LABELS[job.stage] || job.status}
+   197→   197→              </p>
+   198→   198→              <p className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] tabular-nums text-zinc-500">
+   199→   199→                <Clock className="h-3 w-3" strokeWidth={1.5} aria-hidden="true" />
+   200→   200→                {formatDur(elapsedSec)} elapsed
+   201→   201→                {etaSec !== null && <span aria-hidden="true">· ≈ {formatDur(etaSec)} left</span>}
+   202→   202→              </p>
+   203→   203→            </div>
+   204→   204→
+   205→   205→            {/* progress bar */}
+   206→   206→            <div className="mt-5">
+   207→   207→              <div
+   208→   208→                className="relative h-2.5 overflow-hidden rounded-full bg-white/[0.07] ring-1 ring-inset ring-white/5"
+   209→   209→                role="progressbar"
+   210→   210→                aria-valuenow={Math.round(progress * 100)}
+   211→   211→                aria-valuemin={0}
+   212→   212→                aria-valuemax={100}
+   213→   213→                aria-label="Overall progress"
+   214→   214→              >
+   215→   215→                {indeterminate ? (
+   216→   216→                  <div className="ac-indeterminate absolute inset-y-0 left-0 w-1/3 rounded-full bg-gradient-to-r from-transparent via-violet-400 to-transparent" />
+   217→   217→                ) : (
+   218→   218→                  <div
+   219→   219→                    className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 shadow-[0_0_16px_rgba(139,92,246,0.5)] transition-[width] duration-700 ease-out"
+   220→   220→                    style={{ width: `${Math.max(2, progress * 100)}%` }}
+   221→   221→                  />
+   222→   222→                )}
+   223→   223→              </div>
+   224→   224→            </div>
+   225→   225→
+   226→   226→            {/* cancel (two-tap confirm) */}
+   227→   227→            <button
+   228→   228→              type="button"
+   229→   229→              onClick={cancelClick}
+   230→   230→              aria-label={confirmCancel ? "Tap again to confirm cancel" : "Cancel job"}
+   231→   231→              className={`ac-focus mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-2xl border text-[13px] font-semibold transition-all duration-200 active:scale-[0.98] ${
+   232→   232→                confirmCancel
+   233→   233→                  ? "animate-pulse border-red-400/60 bg-red-500/15 text-red-300"
+   234→   234→                  : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-red-400/40 hover:text-red-300"
+   235→   235→              }`}
+   236→   236→            >
+   237→   237→              {confirmCancel ? (
+   238→   238→                <>
+   239→   239→                  <AlertTriangle className="h-4 w-4" strokeWidth={1.5} /> Tap again to cancel
+   240→   240→                </>
+   241→   241→              ) : (
+   242→   242→                <>
+   243→   243→                  <X className="h-4 w-4" strokeWidth={1.5} /> Cancel job
+   244→   244→                </>
+   245→   245→              )}
+   246→   246→            </button>
+   247→   247→          </div>
+   248→   248→        </section>
+   249→   249→      )}
+   250→   250→
+   251→   251→      {/* DONE — celebration header + actions */}
+   252→   252→      {done && (job.clips?.length ?? 0) > 0 && (
+   253→   253→        <section aria-label="Job complete" className="glass ac-rise relative overflow-hidden rounded-3xl p-5 text-center">
+   254→   254→          <div
+   255→   255→            aria-hidden="true"
+   256→   256→            className="absolute inset-0"
+   257→   257→            style={{ background: "radial-gradient(80% 60% at 50% -20%, rgba(139,92,246,0.28), transparent 70%)" }}
+   258→   258→          />
+   259→   259→          <div className="relative">
+   260→   260→            <span
+   261→   261→              className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-[0_12px_36px_-10px_rgba(139,92,246,0.9)]"
+   262→   262→              aria-hidden="true"
+   263→   263→            >
+   264→   264→              <PartyPopper className="h-7 w-7" strokeWidth={1.5} />
+   265→   265→            </span>
+   266→   266→            <h2 className="mt-3 text-xl font-extrabold tracking-tight text-white">
+   267→   267→              <span className="ac-text-grad">
+   268→   268→                {job.clips.length} clip{job.clips.length > 1 ? "s" : ""}
+   269→   269→              </span>{" "}
+   270→   270→              ready
+   271→   271→            </h2>
+   272→   272→            <p className="mt-1 text-[12px] text-zinc-400">
+   273→   273→              {job.video_title || job.source_url || "Uploaded video"}
+   274→   274→              {job.duration > 0 && ` · source ${formatDur(job.duration)}`}
+   275→   275→            </p>
+   276→   276→
+   277→   277→            {/* actions */}
+   278→   278→            <div className="mt-5 space-y-2">
+   279→   279→              <a href={zipUrl(job.id)} download aria-label="Download all clips as zip">
+   280→   280→                <button
+   281→   281→                  type="button"
+   282→   282→                  className="ac-focus flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-violet-400/40 bg-violet-500/10 text-[13px] font-bold text-violet-100 transition-all duration-200 active:scale-[0.98] hover:bg-violet-500/20"
+   283→   283→                >
+   284→   284→                  <FileArchive className="h-4 w-4" strokeWidth={1.5} /> Download all (.zip)
+   285→   285→                </button>
+   286→   286→              </a>
+   287→   287→              <div className="grid grid-cols-3 gap-2">
+   288→   288→                <ActionButton icon={Sparkles} label="Re-render style" onClick={onOpenStyle} ariaLabel="Open style studio to re-render" />
+   289→   289→                <ActionButton icon={Eye} label="Live preview" onClick={() => setLiveOpen(true)} ariaLabel="Open live preview" />
+   290→   290→                <ActionButton icon={Zap} label="New clip" onClick={onNew} ariaLabel="Start a new clip" />
+   291→   291→              </div>
+   292→   292→              {job.has_transcript && (
+   293→   293→                <button
+   294→   294→                  type="button"
+   295→   295→                  onClick={() => setEditorOpen(true)}
+   296→   296→                  aria-label="Edit transcript"
+   297→   297→                  className="ac-focus flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] text-[12px] font-semibold text-zinc-300 transition-all duration-200 active:scale-[0.98] hover:border-white/20"
+   298→   298→                >
+   299→   299→                  <ClipboardList className="h-4 w-4" strokeWidth={1.5} /> Edit transcript (burned into captions)
+   300→   300→                </button>
+   301→   301→              )}
+   302→   302→            </div>
+   303→   303→          </div>
+   304→   304→        </section>
+   305→   305→      )}
+   306→   306→
+   307→   307→      {/* FAILED / CANCELED — error card */}
+   308→   308→      {(failed || job.status === "canceled") && (
+   309→   309→        <section aria-label="Job failed" className="glass ac-rise rounded-3xl p-5">
+   310→   310→          <div className="flex items-start gap-3">
+   311→   311→            <span
+   312→   312→              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ring-1 ring-inset ${
+   313→   313→                failed ? "bg-red-500/15 text-red-300 ring-red-400/25" : "bg-zinc-500/15 text-zinc-300 ring-zinc-400/25"
+   314→   314→              }`}
+   315→   315→              aria-hidden="true"
+   316→   316→            >
+   317→   317→              <AlertTriangle className="h-5 w-5" strokeWidth={1.5} />
+   318→   318→            </span>
+   319→   319→            <div className="min-w-0">
+   320→   320→              <h2 className="text-[15px] font-bold text-white">
+   321→   321→                {failed ? "Couldn't finish this job" : "Job canceled"}
+   322→   322→              </h2>
+   323→   323→              <p className={`mt-1 text-[12px] leading-relaxed ${failed ? "text-red-200/80" : "text-zinc-400"}`}>
+   324→   324→                {failed
+   325→   325→                  ? job.error || "Job failed"
+   326→   326→                  : job.message || "Stopped before completion."}
+   327→   327→              </p>
+   328→   328→            </div>
+   329→   329→          </div>
+   330→   330→          {failed && (
+   331→   331→            <div className="mt-4 flex flex-wrap gap-2" aria-label="Suggestions">
+   332→   332→              {["Try a direct .mp4 link", "Upload the file instead", "Check the video is public"].map((t) => (
+   333→   333→                <span
+   334→   334→                  key={t}
+   335→   335→                  className="flex h-8 items-center rounded-full border border-white/10 bg-white/[0.04] px-3 text-[10px] font-medium text-zinc-400"
+   336→   336→                >
+   337→   337→                  {t}
+   338→   338→                </span>
+   339→   339→              ))}
+   340→   340→            </div>
+   341→   341→          )}
+   342→   342→          <div className="mt-5 flex gap-2">
+   343→   343→            {job.status !== "failed_permanent" && (
+   344→   344→              <button
+   345→   345→                type="button"
+   346→   346→                onClick={onRetry}
+   347→   347→                aria-label="Retry job"
+   348→   348→                className="ac-cta-ring flex-1 active:scale-[0.98]"
+   349→   349→              >
+   350→   350→                <span className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-[13px] font-bold text-white transition-transform duration-200 active:scale-[0.97]">
+   351→   351→                  <RefreshCw className="h-4 w-4" strokeWidth={1.5} /> Retry
+   352→   352→                </span>
+   353→   353→              </button>
+   354→   354→            )}
+   355→   355→            <button
+   356→   356→              type="button"
+   357→   357→              onClick={onNew}
+   358→   358→              aria-label="Start a new clip"
+   359→   359→              className="ac-focus glass flex h-12 flex-1 items-center justify-center gap-2 rounded-full text-[13px] font-semibold text-zinc-300 transition-all duration-200 active:scale-[0.98]"
+   360→   360→            >
+   361→   361→              <Sparkles className="h-4 w-4" strokeWidth={1.5} /> New clip
+   362→   362→            </button>
+   363→   363→          </div>
+   364→   364→        </section>
+   365→   365→      )}
+   366→   366→
+   367→   367→      {/* skeleton placeholders while rendering */}
+   368→   368→      {skeletons > 0 && (
+   369→   369→        <section aria-label="Clips rendering" className="space-y-4">
+   370→   370→          <h3 className="flex items-center gap-1.5 px-1 text-sm font-semibold text-zinc-200">
+   371→   371→            <Sparkles className="h-4 w-4 text-violet-300" strokeWidth={1.5} />
+   372→   372→            Rendering {skeletons} clip{skeletons > 1 ? "s" : ""}…
+   373→   373→          </h3>
+   374→   374→          {Array.from({ length: Math.min(skeletons, 6) }, (_, i) => (
+   375→   375→            <ClipSkeleton key={i} index={(job.clips?.length ?? 0) + i} />
+   376→   376→          ))}
+   377→   377→          {skeletons > 6 && (
+   378→   378→            <p className="text-center text-[10px] text-zinc-600">+ {skeletons - 6} more rendering…</p>
+   379→   379→          )}
+   380→   380→        </section>
+   381→   381→      )}
+   382→   382→
+   383→   383→      {/* Results feed */}
+   384→   384→      {job.clips?.length > 0 && (
+   385→   385→        <section aria-label="Generated clips" className="space-y-4">
+   386→   386→          <div className="flex items-center justify-between gap-2 px-1">
+   387→   387→            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-zinc-200">
+   388→   388→              <CheckCircle2 className="h-4 w-4 text-emerald-400" strokeWidth={1.5} />
+   389→   389→              {done ? "Generated clips" : `${job.clips.length} clip${job.clips.length > 1 ? "s" : ""} ready`}
+   390→   390→            </h3>
+   391→   391→            {!done && (
+   392→   392→              <a href={zipUrl(job.id)} download aria-label="Download all clips as zip">
+   393→   393→                <span className="ac-hit flex h-8 items-center gap-1.5 rounded-full border border-violet-400/40 bg-violet-500/10 px-3 text-[10px] font-bold text-violet-200">
+   394→   394→                  <FileArchive className="h-3.5 w-3.5" strokeWidth={1.5} /> .zip
+   395→   395→                </span>
+   396→   396→              </a>
+   397→   397→            )}
+   398→   398→          </div>
+   399→   399→          {job.clips.map((clip) => (
+   400→   400→            <ClipCard key={clip.index} job={job} clip={clip} />
+   401→   401→          ))}
+   402→   402→        </section>
+   403→   403→      )}
+   404→   404→
+   405→   405→      {/* transcript editor entry (while still rendering / analyzing) */}
+   406→   406→      {job.has_transcript && !done && (job.status === "analyzing" || job.status === "rendering") && (
+   407→   407→        <button
+   408→   408→          type="button"
+   409→   409→          onClick={() => setEditorOpen(true)}
+   410→   410→          aria-label="Edit transcript"
+   411→   411→          className="ac-focus glass flex h-11 w-full items-center justify-center gap-2 rounded-2xl text-[12px] font-semibold text-zinc-300 transition-all duration-200 active:scale-[0.98] hover:text-violet-200"
+   412→   412→        >
+   413→   413→          <ClipboardList className="h-4 w-4" strokeWidth={1.5} /> Edit transcript (burned into captions)
+   414→   414→        </button>
+   415→   415→      )}
+   416→   416→
+   417→   417→      <LivePreviewDialog job={job} settings={settings} open={liveOpen} onOpenChange={setLiveOpen} />
+   418→   418→      <TranscriptEditor
+   419→   419→        job={job}
+   420→   420→        open={editorOpen}
+   421→   421→        onOpenChange={setEditorOpen}
+   422→   422→        onSaved={() => {
+   423→   423→          toast({ title: "Transcript saved", description: "Edits are burned into subtitles on the next render." });
+   424→   424→          onRerender(settings);
+   425→   425→        }}
+   426→   426→      />
+   427→   427→    </div>
+   428→   428→  );
+   429→   429→}
+   430→   430→
+   431→   431→function ActionButton({
+   432→   432→  icon: Icon, label, onClick, ariaLabel,
+   433→   433→}: { icon: LucideIcon; label: string; onClick: () => void; ariaLabel: string }) {
+   434→   434→  return (
+   435→   435→    <button
+   436→   436→      type="button"
+   437→   437→      onClick={onClick}
+   438→   438→      aria-label={ariaLabel}
+   439→   439→      className="ac-focus glass flex h-12 flex-col items-center justify-center gap-1 rounded-2xl text-[10px] font-semibold text-zinc-300 transition-all duration-200 active:scale-[0.96] hover:text-violet-200"
+   440→   440→    >
+   441→   441→      <Icon className="h-4 w-4" strokeWidth={1.5} />
+   442→   442→      {label}
+   443→   443→    </button>
+   444→   444→  );
+   445→   445→}
+   446→   446→
+   447→   447→function ClipSkeleton({ index }: { index: number }) {
+   448→   448→  return (
+   449→   449→    <div className="glass overflow-hidden rounded-3xl">
+   450→   450→      <div className="ac-shimmer relative flex h-52 items-center justify-center overflow-hidden bg-white/[0.03]">
+   451→   451→        <div className="flex flex-col items-center gap-2 text-zinc-600">
+   452→   452→          <Film className="h-7 w-7" strokeWidth={1.5} />
+   453→   453→          <span className="text-[10px] font-medium">Rendering clip #{index + 1}…</span>
+   454→   454→        </div>
+   455→   455→      </div>
+   456→   456→      <div className="space-y-2.5 p-4">
+   457→   457→        <div className="ac-shimmer relative h-3.5 w-3/4 overflow-hidden rounded-full bg-white/[0.05]" />
+   458→   458→        <div className="ac-shimmer relative h-2.5 w-1/2 overflow-hidden rounded-full bg-white/[0.04]" />
+   459→   459→      </div>
+   460→   460→    </div>
+   461→   461→  );
+   462→   462→}
+   463→   463→
+   464→   464→function ClipCard({ job, clip }: { job: Job; clip: Clip }) {
+   465→   465→  const url = clipFileUrl(job.id, clip);
+   466→   466→  // scores may arrive on a 0–10 or 0–100 scale depending on scorer version
+   467→   467→  const norm = clip.score <= 10 ? clip.score / 10 : clip.score / 100;
+   468→   468→  const high = norm >= 0.7;
+   469→   469→  return (
+   470→   470→    <article className="glass ac-rise overflow-hidden rounded-3xl">
+   471→   471→      <div className="relative bg-black">
+   472→   472→        <video
+   473→   473→          src={url}
+   474→   474→          poster={`${clip.thumbUrl}?XTransformPort=${ENGINE_PORT}`}
+   475→   475→          controls
+   476→   476→          playsInline
+   477→   477→          preload="metadata"
+   478→   478→          aria-label={clip.title}
+   479→   479→          className="max-h-[420px] w-full bg-black"
+   480→   480→        />
+   481→   481→        {/* viral score — gradient pill, top-right */}
+   482→   482→        <span
+   483→   483→          className={`absolute right-2.5 top-2.5 flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold tabular-nums shadow-lg ${
+   484→   484→            high
+   485→   485→              ? "bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-[0_4px_16px_-4px_rgba(139,92,246,0.8)]"
+   486→   486→              : "bg-black/70 text-violet-200 backdrop-blur-sm"
+   487→   487→          }`}
+   488→   488→          aria-label={`Viral score ${clip.score}`}
+   489→   489→        >
+   490→   490→          <Star className="h-3 w-3" strokeWidth={2.5} fill="currentColor" aria-hidden="true" /> {clip.score}
+   491→   491→        </span>
+   492→   492→        <span className="absolute bottom-2.5 left-2.5 rounded-full bg-black/70 px-2 py-1 text-[10px] font-medium text-zinc-200 backdrop-blur-sm">
+   493→   493→          #{clip.index + 1}
+   494→   494→        </span>
+   495→   495→        <span className="absolute bottom-2.5 right-2.5 flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 text-[10px] font-semibold tabular-nums text-white backdrop-blur-sm">
+   496→   496→          <Play className="h-3 w-3" strokeWidth={1.5} fill="currentColor" aria-hidden="true" /> {formatDur(clip.duration)}
+   497→   497→        </span>
+   498→   498→      </div>
+   499→   499→      <div className="space-y-3 p-4">
+   500→   500→        <div>
+   501→   501→          <h3 className="text-[14px] font-bold leading-snug text-white">{clip.title}</h3>
+   502→   502→          {clip.reason && <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">{clip.reason}</p>}
+   503→   503→        </div>
+   504→   504→        {/* meta chips */}
+   505→   505→        <div className="flex flex-wrap items-center gap-1.5">
+   506→   506→          <span className="flex h-7 items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2.5 text-[10px] font-medium tabular-nums text-zinc-400">
+   507→   507→            <Clock className="h-3 w-3" strokeWidth={1.5} aria-hidden="true" />
+   508→   508→            {Math.floor(clip.start / 60)}:{String(Math.round(clip.start % 60)).padStart(2, "0")}–
+   509→   509→            {Math.floor(clip.end / 60)}:{String(Math.round(clip.end % 60)).padStart(2, "0")}
+   510→   510→          </span>
+   511→   511→          <span className="flex h-7 items-center rounded-full border border-white/10 bg-white/[0.04] px-2.5 text-[10px] font-medium tabular-nums text-zinc-400">
+   512→   512→            {formatBytes(clip.size)}
+   513→   513→          </span>
+   514→   514→          {clip.driveUrl ? (
+   515→   515→            <a
+   516→   516→              href={clip.driveUrl}
+   517→   517→              target="_blank"
+   518→   518→              rel="noreferrer"
+   519→   519→              aria-label="Open in Google Drive"
+   520→   520→              className="ac-hit flex h-7 items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2.5 text-[10px] font-semibold text-emerald-300"
+   521→   521→            >
+   522→   522→              <HardDrive className="h-3 w-3" strokeWidth={1.5} /> Drive
+   523→   523→            </a>
+   524→   524→          ) : (
+   525→   525→            <span className="flex h-7 items-center gap-1 rounded-full border border-white/10 px-2.5 text-[10px] text-zinc-600">
+   526→   526→              <HardDrive className="h-3 w-3" strokeWidth={1.5} /> local only
+   527→   527→            </span>
+   528→   528→          )}
+   529→   529→        </div>
+   530→   530→        <a
+   531→   531→          href={url}
+   532→   532→          download={`${clip.title.replace(/[^\w\s-]/g, "").slice(0, 40) || "autoclip"}.mp4`}
+   533→   533→          className="block"
+   534→   534→          aria-label={`Download ${clip.title}`}
+   535→   535→        >
+   536→   536→          <span className="ac-cta-ring block transition-transform duration-200 active:scale-[0.98]">
+   537→   537→            <span className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-[14px] font-bold text-white transition-transform duration-200 active:scale-[0.97]">
+   538→   538→              <Download className="h-4 w-4" strokeWidth={1.5} /> Download MP4
+   539→   539→            </span>
+   540→   540→          </span>
+   541→   541→        </a>
+   542→   542→      </div>
+   543→   543→    </article>
+   544→   544→  );
+   545→   545→}
+   546→   546→
+   547→   547→/** Engine-rendered single frame preview with time slider. */
+   548→   548→function LivePreviewDialog({
+   549→   549→  job, settings, open, onOpenChange,
+   550→   550→}: { job: Job; settings: ClipSettings; open: boolean; onOpenChange: (v: boolean) => void }) {
+   551→   551→  const [t, setT] = useState(Math.min(5, Math.max(1, (job.duration || 10) / 2)));
+   552→   552→  const [img, setImg] = useState<string | null>(null);
+   553→   553→  const [loading, setLoading] = useState(false);
+   554→   554→  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+   555→   555→
+   556→   556→  const renderPreview = useCallback(
+   557→   557→    async (time: number) => {
+   558→   558→      setLoading(true);
+   559→   559→      try {
+   560→   560→        const res = await fetch(
+   561→   561→          `/engine/api/jobs/${job.id}/preview?XTransformPort=${ENGINE_PORT}`,
+   562→   562→          {
+   563→   563→            method: "POST",
+   564→   564→            headers: { "Content-Type": "application/json" },
+   565→   565→            body: JSON.stringify({ t: time, settings }),
+   566→   566→          }
+   567→   567→        );
+   568→   568→        if (!res.ok) throw new Error("preview failed");
+   569→   569→        const blob = await res.blob();
+   570→   570→        setImg((old) => {
+   571→   571→          if (old) URL.revokeObjectURL(old);
+   572→   572→          return URL.createObjectURL(blob);
+   573→   573→        });
+   574→   574→      } catch {
+   575→   575→        /* preview is best-effort */
+   576→   576→      } finally {
+   577→   577→        setLoading(false);
+   578→   578→      }
+   579→   579→    },
+   580→   580→    [job.id, settings]
+   581→   581→  );
+   582→   582→
+   583→   583→  useEffect(() => {
+   584→   584→    if (!open) return;
+   585→   585→    if (debounce.current) clearTimeout(debounce.current);
+   586→   586→    debounce.current = setTimeout(() => renderPreview(t), 400);
+   587→   587→    return () => {
+   588→   588→      if (debounce.current) clearTimeout(debounce.current);
+   589→   589→    };
+   590→   590→  }, [open, t, renderPreview]);
+   591→   591→
+   592→   592→  return (
+   593→   593→    <Dialog open={open} onOpenChange={onOpenChange}>
+   594→   594→      <DialogContent aria-describedby={undefined} className="glass-blur max-w-[340px] rounded-3xl p-5">
+   595→   595→        <DialogHeader>
+   596→   596→          <DialogTitle className="text-sm font-semibold text-white">Live preview</DialogTitle>
+   597→   597→        </DialogHeader>
+   598→   598→        <div className="relative mx-auto w-full max-w-[260px] overflow-hidden rounded-2xl border border-white/10 bg-black">
+   599→   599→          {img ? (
+   600→   600→            <img src={img} alt="Styled frame preview" className="w-full" />
+   601→   601→          ) : (
+   602→   602→            <div className="ac-shimmer relative flex aspect-[9/16] items-center justify-center overflow-hidden bg-white/[0.03]">
+   603→   603→              <Loader2 className="h-6 w-6 animate-spin text-violet-300" strokeWidth={1.5} />
+   604→   604→            </div>
+   605→   605→          )}
+   606→   606→          {loading && img && (
+   607→   607→            <div className="absolute right-2 top-2 rounded-full bg-black/70 p-1.5" aria-hidden="true">
+   608→   608→              <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-300" strokeWidth={1.5} />
+   609→   609→            </div>
+   610→   610→          )}
+   611→   611→        </div>
+   612→   612→        <div>
+   613→   613→          <div className="mb-2 flex items-center justify-between text-xs text-zinc-400">
+   614→   614→            <span>Frame time</span>
+   615→   615→            <span className="rounded-full border border-violet-400/30 bg-violet-500/15 px-2.5 py-1 text-[10px] font-bold tabular-nums text-violet-200">
+   616→   616→              {t.toFixed(1)}s of {formatDur(job.duration)}
+   617→   617→            </span>
+   618→   618→          </div>
+   619→   619→          <Slider value={[t]} min={0} max={Math.max(1, job.duration - 1)} step={0.5} onValueChange={([v]) => setT(v)} aria-label="Preview frame time" />
+   620→   620→        </div>
+   621→   621→        <p className="text-[10px] leading-relaxed text-zinc-500">
+   622→   622→          Real ffmpeg render of the current style at the chosen moment — exactly what the exported clip looks like.
+   623→   623→        </p>
+   624→   624→      </DialogContent>
+   625→   625→    </Dialog>
+   626→   626→  );
+   627→   627→}
+   628→   628→
+   629→   629→function TranscriptEditor({
+   630→   630→  job, open, onOpenChange, onSaved,
+   631→   631→}: { job: Job; open: boolean; onOpenChange: (v: boolean) => void; onSaved: () => void }) {
+   632→   632→  const [texts, setTexts] = useState<string[]>([]);
+   633→   633→  const [saving, setSaving] = useState(false);
+   634→   634→  const { toast } = useToast();
+   635→   635→
+   636→   636→  useEffect(() => {
+   637→   637→    if (open && job.sentences) setTexts(job.sentences.map((s) => s.text));
+   638→   638→  }, [open, job.sentences]);
+   639→   639→
+   640→   640→  const save = async () => {
+   641→   641→    setSaving(true);
+   642→   642→    try {
+   643→   643→      await api.saveTranscript(job.id, texts.map((text) => ({ text })));
+   644→   644→      onSaved();
+   645→   645→      onOpenChange(false);
+   646→   646→    } catch (e) {
+   647→   647→      toast({ title: "Save failed", description: String((e as Error).message), variant: "destructive" });
+   648→   648→    } finally {
+   649→   649→      setSaving(false);
+   650→   650→    }
+   651→   651→  };
+   652→   652→
+   653→   653→  return (
+   654→   654→    <Dialog open={open} onOpenChange={onOpenChange}>
+   655→   655→      <DialogContent aria-describedby={undefined} className="glass-blur max-h-[85vh] max-w-[400px] overflow-hidden rounded-3xl p-5">
+   656→   656→        <DialogHeader>
+   657→   657→          <DialogTitle className="text-sm font-semibold text-white">Transcript editor</DialogTitle>
+   658→   658→        </DialogHeader>
+   659→   659→        <p className="text-[11px] text-zinc-500">
+   660→   660→          Fix transcription errors — your edits are burned into the rendered captions.
+   661→   661→        </p>
+   662→   662→        <div className="max-h-[52vh] space-y-2 overflow-y-auto pr-1">
+   663→   663→          {texts.map((text, i) => (
+   664→   664→            <div key={i} className="flex gap-2">
+   665→   665→              <span className="w-10 shrink-0 pt-2.5 text-right text-[10px] tabular-nums text-zinc-600">
+   666→   666→                {Math.floor((job.sentences?.[i]?.start ?? 0) / 60)}:
+   667→   667→                {String(Math.round((job.sentences?.[i]?.start ?? 0) % 60)).padStart(2, "0")}
+   668→   668→              </span>
+   669→   669→              <Textarea
+   670→   670→                value={text}
+   671→   671→                onChange={(e) => setTexts((arr) => arr.map((v, k) => (k === i ? e.target.value : v)))}
+   672→   672→                className="min-h-[44px] resize-none rounded-xl border-white/10 bg-white/[0.04] text-xs text-zinc-100 focus-visible:ring-violet-500/30"
+   673→   673→                rows={2}
+   674→   674→                aria-label={`Edit sentence ${i + 1}`}
+   675→   675→              />
+   676→   676→            </div>
+   677→   677→          ))}
+   678→   678→        </div>
+   679→   679→        <button
+   680→   680→          type="button"
+   681→   681→          onClick={save}
+   682→   682→          disabled={saving}
+   683→   683→          aria-label="Save transcript and re-render"
+   684→   684→          className="ac-cta-ring w-full transition-transform duration-200 active:scale-[0.98] disabled:opacity-60"
+   685→   685→        >
+   686→   686→          <span className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 text-sm font-bold text-white">
+   687→   687→            {saving ? <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} /> : null}
+   688→   688→            Save & re-render with edits
+   689→   689→          </span>
+   690→   690→        </button>
+   691→   691→      </DialogContent>
+   692→   692→    </Dialog>
+   693→   693→  );
+   694→   694→}
+   695→   695→

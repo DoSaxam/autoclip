@@ -6,8 +6,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter-sans), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -122,10 +123,21 @@
 }
 
 /* ============================================================
-   Autoclip mobile UX layer — presentation only, no logic.
+   Autoclip — "Aurora Glass" design system (UI rebuild)
+   Deep space background · violet→fuchsia gradients · glass
+   surfaces · cyan accent used sparingly. Presentation only.
    ============================================================ */
 
+:root {
+  --ac-bg: #0b0b14;
+  --ac-bg-2: #12121f;
+  --ac-violet: #8b5cf6;
+  --ac-fuchsia: #d946ef;
+  --ac-cyan: #22d3ee;
+}
+
 html {
+  color-scheme: dark;
   overflow-x: clip;
 }
 
@@ -133,20 +145,46 @@ body {
   overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
   text-rendering: optimizeLegibility;
+  background-color: var(--ac-bg);
 }
 
-/* Comfortably tappable slider thumbs (all Radix sliders app-wide) */
-[data-slot="slider-thumb"] {
-  width: 1.25rem;
-  height: 1.25rem;
-  border-width: 2px;
+/* --- glass surfaces ------------------------------------------------ */
+
+/* Static glass card (no backdrop-filter — cheap on large surfaces).
+   Components add their own rounding (rounded-3xl etc.). */
+.glass {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+    0 12px 40px -20px rgba(0, 0, 0, 0.7);
 }
-[data-slot="slider-thumb"]:focus-visible {
-  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.35);
+
+/* Floating chrome (header, tab bar, sticky bars, dialogs) —
+   small surfaces only, backdrop blur is fine here. */
+.glass-blur {
+  background: rgba(18, 18, 31, 0.74);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 16px 48px -16px rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(22px) saturate(1.5);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
 }
+
+/* Gradient display text for hero words / big numbers */
+.ac-text-grad {
+  background: linear-gradient(100deg, #a78bfa 0%, #d946ef 55%, #67e8f9 130%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* --- interaction helpers -------------------------------------------- */
 
 /* Expands the pointer hit-area of small controls by 6px per side
-   without changing their visual size (mobile touch targets ≥44px). */
+   without changing their visual size (touch targets ≥44px). */
 .ac-hit {
   position: relative;
 }
@@ -157,30 +195,100 @@ body {
   border-radius: inherit;
 }
 
-/* Amber focus ring for custom non-shadcn buttons */
+/* Violet focus ring for custom non-shadcn buttons */
 .ac-focus:focus-visible {
-  outline: 2px solid #f59e0b;
+  outline: 2px solid rgba(167, 139, 250, 0.9);
   outline-offset: 2px;
 }
 
-/* --- keyframes ------------------------------------------------ */
+/* Hide scrollbars on horizontal snap rows */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
 
-/* Step content transition (source → style → generate) */
-@keyframes ac-step-in {
+/* --- Radix restyle: violet sliders & switches ------------------------ */
+
+[data-slot="slider-track"] {
+  background: rgba(255, 255, 255, 0.09);
+}
+[data-slot="slider-range"] {
+  background: linear-gradient(90deg, var(--ac-violet), var(--ac-fuchsia));
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.35);
+}
+[data-slot="slider-thumb"] {
+  width: 1.375rem;
+  height: 1.375rem;
+  border-width: 2px;
+  background: #fff;
+  border-color: var(--ac-violet);
+  box-shadow:
+    0 2px 10px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(139, 92, 246, 0.3);
+}
+[data-slot="slider-thumb"]:focus-visible {
+  box-shadow: 0 0 0 5px rgba(139, 92, 246, 0.3);
+}
+
+[data-slot="switch"][data-state="checked"] {
+  background: linear-gradient(90deg, var(--ac-violet), var(--ac-fuchsia));
+  border-color: rgba(217, 70, 239, 0.35);
+}
+[data-slot="switch"]:focus-visible {
+  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.35);
+}
+
+/* --- keyframes -------------------------------------------------------- */
+
+/* Screen transition (fade + slide-up, 240ms) */
+@keyframes ac-screen {
   from {
     opacity: 0;
-    transform: translateY(12px) scale(0.99);
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.ac-screen {
+  animation: ac-screen 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Staggered card entrance (use with per-card animationDelay, 60ms steps) */
+@keyframes ac-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
   }
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
 }
-.ac-step-in {
-  animation: ac-step-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+.ac-rise {
+  animation: ac-rise 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Skeleton shimmer (parent needs relative + overflow-hidden) */
+/* Style studio slides up like a bottom sheet (240ms page transition) */
+@keyframes ac-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(48px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.ac-slide-up {
+  animation: ac-slide-up 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Skeleton shimmer, violet tint (parent needs relative + overflow-hidden) */
 @keyframes ac-shimmer {
   from {
     transform: translateX(-100%);
@@ -196,13 +304,13 @@ body {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.07) 50%,
+    rgba(167, 139, 250, 0.13) 50%,
     transparent 100%
   );
-  animation: ac-shimmer 1.7s ease-in-out infinite;
+  animation: ac-shimmer 1.8s ease-in-out infinite;
 }
 
-/* Indeterminate → determinate progress bar */
+/* Indeterminate → determinate progress fill */
 @keyframes ac-indeterminate {
   0% {
     transform: translateX(-110%);
@@ -215,7 +323,7 @@ body {
   animation: ac-indeterminate 1.35s cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
 
-/* Soft radar ping for status dots */
+/* Radar ping for status dots */
 @keyframes ac-ping {
   0% {
     transform: scale(1);
@@ -231,11 +339,61 @@ body {
   animation: ac-ping 1.9s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
 
+/* Pulsing gradient glow for the active pipeline stage node */
+@keyframes ac-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(139, 92, 246, 0.55),
+      0 0 16px rgba(217, 70, 239, 0.4);
+  }
+  50% {
+    box-shadow:
+      0 0 0 9px rgba(139, 92, 246, 0),
+      0 0 26px rgba(217, 70, 239, 0.7);
+  }
+}
+.ac-glow {
+  animation: ac-glow 1.8s ease-in-out infinite;
+}
+
+/* Animated gradient border ring for primary CTAs */
+@keyframes ac-pan {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+.ac-cta-ring {
+  border-radius: 9999px;
+  padding: 2px;
+  background: linear-gradient(
+    90deg,
+    #8b5cf6,
+    #d946ef,
+    #22d3ee,
+    #8b5cf6
+  );
+  background-size: 300% 100%;
+  animation: ac-pan 4s linear infinite;
+  box-shadow: 0 10px 32px -14px rgba(139, 92, 246, 0.6);
+}
+
+/* Reduced-motion kill switch */
 @media (prefers-reduced-motion: reduce) {
-  .ac-step-in,
+  .ac-screen,
+  .ac-rise,
+  .ac-slide-up,
   .ac-shimmer::after,
   .ac-indeterminate,
   .ac-ping,
+  .ac-glow,
+  .ac-cta-ring,
   .animate-pulse,
   .animate-spin {
     animation: none;
