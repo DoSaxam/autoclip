@@ -120,3 +120,124 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ============================================================
+   Autoclip mobile UX layer — presentation only, no logic.
+   ============================================================ */
+
+html {
+  overflow-x: clip;
+}
+
+body {
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+  text-rendering: optimizeLegibility;
+}
+
+/* Comfortably tappable slider thumbs (all Radix sliders app-wide) */
+[data-slot="slider-thumb"] {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-width: 2px;
+}
+[data-slot="slider-thumb"]:focus-visible {
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.35);
+}
+
+/* Expands the pointer hit-area of small controls by 6px per side
+   without changing their visual size (mobile touch targets ≥44px). */
+.ac-hit {
+  position: relative;
+}
+.ac-hit::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+}
+
+/* Amber focus ring for custom non-shadcn buttons */
+.ac-focus:focus-visible {
+  outline: 2px solid #f59e0b;
+  outline-offset: 2px;
+}
+
+/* --- keyframes ------------------------------------------------ */
+
+/* Step content transition (source → style → generate) */
+@keyframes ac-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.ac-step-in {
+  animation: ac-step-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Skeleton shimmer (parent needs relative + overflow-hidden) */
+@keyframes ac-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+.ac-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.07) 50%,
+    transparent 100%
+  );
+  animation: ac-shimmer 1.7s ease-in-out infinite;
+}
+
+/* Indeterminate → determinate progress bar */
+@keyframes ac-indeterminate {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(310%);
+  }
+}
+.ac-indeterminate {
+  animation: ac-indeterminate 1.35s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+/* Soft radar ping for status dots */
+@keyframes ac-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  80%,
+  100% {
+    transform: scale(2.8);
+    opacity: 0;
+  }
+}
+.ac-ping {
+  animation: ac-ping 1.9s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ac-step-in,
+  .ac-shimmer::after,
+  .ac-indeterminate,
+  .ac-ping,
+  .animate-pulse,
+  .animate-spin {
+    animation: none;
+  }
+}

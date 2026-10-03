@@ -52,3 +52,15 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# Autoclip runtime data (regenerated on first run — never commit)
+engine/data/
+engine/warp/wireproxy.log
+engine/warp/endpoints.json
+upload/
+db/
+*.pid
+bun.lock.orig
+
+# OS
+Thumbs.db

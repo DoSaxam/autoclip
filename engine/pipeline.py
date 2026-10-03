@@ -25,6 +25,8 @@ RETRYABLE_YT_PATTERNS = [
     "timed out",
     "premature",
     "please install pysocks",
+    "cloudflare anti-bot",   # retry with generic:impersonate (curl_cffi)
+    "impersonation",
 ]
 BOT_BLOCK_PATTERNS = [
     "sign in to confirm you",  # covers you're / you’re apostrophe variants
@@ -59,6 +61,7 @@ def _stage_progress(job_id, status, stage, msg=""):
 def yt_client_chain():
     return [
         None,  # default clients
+        {"generic": {"impersonate": True}},  # Cloudflare-403 bypass via curl_cffi
         {"youtube": {"player_client": ["android"]}},
         {"youtube": {"player_client": ["ios"]}},
         {"youtube": {"player_client": ["web_safari"]}},

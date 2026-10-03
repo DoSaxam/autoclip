@@ -1,0 +1,74 @@
+{
+  "name": "Autoclip Design Tokens",
+  "description": "Mobile-first (390px) design system for the Autoclip video-clipping app. Dark, cinematic, high-contrast; amber accent (no blue/indigo per brand rules).",
+  "color": {
+    "background": { "value": "#09090b", "token": "zinc-950", "usage": "app background" },
+    "surface": { "value": "#18181b", "token": "zinc-900", "usage": "cards, input fields" },
+    "surfaceRaised": { "value": "#27272a", "token": "zinc-800", "usage": "chips, progress track" },
+    "border": { "value": "#27272a", "token": "zinc-800", "usage": "card borders (subtle)" },
+    "borderStrong": { "value": "#3f3f46", "token": "zinc-700", "usage": "buttons, dividers" },
+    "textPrimary": { "value": "#f4f4f5", "token": "zinc-100", "usage": "headings, titles" },
+    "textSecondary": { "value": "#a1a1aa", "token": "zinc-400", "usage": "body, labels" },
+    "textMuted": { "value": "#71717a", "token": "zinc-500", "usage": "hints, timestamps" },
+    "accent": { "value": "#f59e0b", "token": "amber-500", "usage": "primary actions, active states, logo" },
+    "accentHover": { "value": "#fbbf24", "token": "amber-400", "usage": "action hover" },
+    "accentText": { "value": "#000000", "usage": "text on amber buttons" },
+    "accentSoft": { "value": "rgba(245,158,11,0.10)", "usage": "active chip/toggle background" },
+    "success": { "value": "#10b981", "token": "emerald-500", "usage": "done state, online dot, progress bar fill" },
+    "danger": { "value": "#ef4444", "token": "red-500", "usage": "failed state, beast captions" },
+    "info": { "value": "#facc15", "token": "yellow-400", "usage": "hormozi captions, scores" }
+  },
+  "typography": {
+    "uiFamily": "Geist Sans (system fallback)",
+    "captionFonts": {
+      "heavy": ["Inter Black", "Anton", "Archivo Black", "Montserrat Black", "Rubik Black", "Kanit Black", "Alfa Slab One", "Sigmar One", "Oswald", "Bebas Neue", "Poppins ExtraBold", "Lexend ExtraBold", "Passion One Bold", "Titan One", "Luckiest Guy", "Fredoka SemiBold"],
+      "expressive": ["Bangers", "Creepster", "Righteous"],
+      "handwritten": ["Permanent Marker", "Lobster", "Pacifico"]
+    },
+    "scale": {
+      "display": "15px/700 (app title)",
+      "h1": "15px/700",
+      "h2": "14px/600 (section titles)",
+      "body": "13-14px/400-500",
+      "caption": "11px/400",
+      "micro": "10px/400 (metadata, chips)"
+    }
+  },
+  "spacing": {
+    "base": 4,
+    "cardPadding": "16px (p-4)",
+    "sectionGap": "24px (space-y-6)",
+    "screenPadding": "16px (px-4)",
+    "touchTarget": "44px minimum (buttons h-11/h-12, chips min-h-[44px])"
+  },
+  "radius": {
+    "chip": "8px (rounded-lg)",
+    "card": "16px (rounded-2xl)",
+    "phonePreview": "26px (rounded-[1.6rem])",
+    "pill": "9999px (rounded-full)"
+  },
+  "motion": {
+    "presetAnimations": {
+      "karaoke": "word highlight follows speech timing",
+      "pop": "scale 0→115%→100% in 220ms",
+      "bounce": "scaleY 0→112%→92%→100% in 420ms",
+      "wobble": "rotation ±6° oscillation 600ms",
+      "rainbow": "hue cycle per word 400ms",
+      "typewriter": "alpha reveal synced to word starts (60ms fade)",
+      "slide": "move from -60% x to center in 240ms",
+      "elastic": "scale 60→110→90→105→100% in 460ms"
+    },
+    "transitions": "150-250ms ease for UI state changes"
+  },
+  "layout": {
+    "maxWidth": "448px (max-w-md) centered",
+    "header": "sticky top, 56px, blur backdrop",
+    "bottomBar": "sticky bottom, 48px + safe-area inset",
+    "videoAspect": { "9:16": "1080x1920", "1:1": "1080x1080", "4:5": "1080x1350", "16:9": "1920x1080" }
+  },
+  "iconography": {
+    "library": "lucide-react",
+    "strokeWidth": 1.5,
+    "sizes": { "inline": 12, "control": 16, "hero": 20 }
+  }
+}

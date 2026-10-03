@@ -1,4 +1,16 @@
-yt-dlp>=2025.1.1
-fastapi>=0.115.0
-uvicorn>=0.30.0
-faster-whisper>=1.0.0
+# Autoclip engine — Python dependencies
+# Install: pip install -r requirements.txt
+# NOTE: do NOT `pip install -U av` — faster-whisper 1.2.1 needs a compatible av;
+# if av is broken, patch faster_whisper/audio.py to drop metadata_errors kwarg.
+
+fastapi==0.128.0
+uvicorn==0.44.0
+pydantic==2.12.5
+python-multipart==0.0.24
+faster-whisper==1.2.1
+opencv-python-headless==4.13.0.90
+numpy==2.1.3
+yt-dlp==2026.8.19
+requests==2.32.5
+PySocks==1.7.1
+curl_cffi==0.16.3    # yt-dlp generic:impersonate — bypasses Cloudflare 403 on direct media URLs
