@@ -1,0 +1,51 @@
+/* Caption font faces — the exact fonts the engine burns into subtitles */
+@font-face { font-family: 'Inter'; src: url('/fonts/Inter-Black.ttf') format('truetype'); font-weight: 900; font-display: swap; }
+@font-face { font-family: 'Inter'; src: url('/fonts/Inter-Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Anton'; src: url('/fonts/Anton-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Bebas Neue'; src: url('/fonts/BebasNeue-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Poppins ExtraBold'; src: url('/fonts/Poppins-ExtraBold.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Bangers'; src: url('/fonts/Bangers-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Titan One'; src: url('/fonts/TitanOne-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Permanent Marker'; src: url('/fonts/PermanentMarker-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Archivo Black'; src: url('/fonts/ArchivoBlack-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Luckiest Guy'; src: url('/fonts/LuckiestGuy-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Montserrat Black'; src: url('/fonts/Montserrat-Black.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Oswald'; src: url('/fonts/Oswald-Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Rubik Black'; src: url('/fonts/Rubik-Black.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Lexend ExtraBold'; src: url('/fonts/Lexend-ExtraBold.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Kanit Black'; src: url('/fonts/Kanit-Black.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Alfa Slab One'; src: url('/fonts/AlfaSlabOne-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Sigmar One'; src: url('/fonts/SigmarOne-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Passion One Bold'; src: url('/fonts/PassionOne-Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Righteous'; src: url('/fonts/Righteous-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Creepster'; src: url('/fonts/Creepster-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Lobster'; src: url('/fonts/Lobster-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Pacifico'; src: url('/fonts/Pacifico-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Fredoka SemiBold'; src: url('/fonts/Fredoka-SemiBold.ttf') format('truetype'); font-weight: 600; font-display: swap; }
+
+/* font family variables for UI previews */
+:root {
+  --fc-inter: 'Inter';
+  --fc-inter-bold: 'Inter';
+  --fc-anton: 'Anton';
+  --fc-bebas: 'Bebas Neue';
+  --fc-poppins: 'Poppins ExtraBold';
+  --fc-bangers: 'Bangers';
+  --fc-titan: 'Titan One';
+  --fc-marker: 'Permanent Marker';
+  --fc-archivo: 'Archivo Black';
+  --fc-luckiest: 'Luckiest Guy';
+  --fc-montserrat: 'Montserrat Black';
+  --fc-oswald: 'Oswald';
+  --fc-rubik: 'Rubik Black';
+  --fc-lexend: 'Lexend ExtraBold';
+  --fc-kanit: 'Kanit Black';
+  --fc-alfaslab: 'Alfa Slab One';
+  --fc-sigmar: 'Sigmar One';
+  --fc-passion: 'Passion One Bold';
+  --fc-righteous: 'Righteous';
+  --fc-creepster: 'Creepster';
+  --fc-lobster: 'Lobster';
+  --fc-pacifico: 'Pacifico';
+  --fc-fredoka: 'Fredoka SemiBold';
+}

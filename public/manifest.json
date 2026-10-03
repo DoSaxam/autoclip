@@ -1,0 +1,13 @@
+{
+  "name": "Autoclip — viral shorts generator",
+  "short_name": "Autoclip",
+  "description": "Paste a link, get captioned vertical clips ready to post.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#f59e0b",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
